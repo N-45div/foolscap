@@ -40,6 +40,8 @@ function toolSummary(t: ToolInteraction): string {
   switch (t.name) {
     case "Bash":
     case "PowerShell":
+    case "shell_command":
+    case "shell":
       return first("command").split("\n")[0].slice(0, 120);
     case "Read":
     case "Write":
@@ -229,8 +231,10 @@ export function Notebook({
           {m.cwd && <span className="truncate">{m.cwd}</span>}
           {m.gitBranch && <span>⎇ {m.gitBranch}</span>}
           <span>{doc.cells.length} cells</span>
-          <span>{fmtTokens(m.totalOutputTokens)} tokens out</span>
-          {m.version && <span>cc {m.version}</span>}
+          {m.totalOutputTokens > 0 && (
+            <span>{fmtTokens(m.totalOutputTokens)} tokens out</span>
+          )}
+          {m.agent && <span>{m.agent}</span>}
           {m.startedAt && (
             <span>
               {new Date(m.startedAt).toLocaleDateString(undefined, {

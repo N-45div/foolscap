@@ -73,6 +73,9 @@ export type SessionDoc = {
     cwd?: string;
     gitBranch?: string;
     version?: string;
+    /** Display label for the harness that produced this session,
+        e.g. "claude code 2.1.223" or "codex · 0.142.2 · gpt-5.5". */
+    agent?: string;
     startedAt?: string;
     endedAt?: string;
     totalOutputTokens: number;
@@ -220,6 +223,7 @@ export function parseSession(ndjson: string): SessionDoc {
     // summary / attachment / system / future types: counted, not rendered.
   }
 
+  if (doc.meta.version) doc.meta.agent = `claude code ${doc.meta.version}`;
   return doc;
 }
 

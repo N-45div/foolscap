@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  parseSession,
   prettyProjectName,
-  type ProjectRef,
   type SessionDoc,
   type SessionRef,
 } from "./model";
+import { SOURCES, type SourceId } from "./sources";
 import { Notebook } from "./Notebook";
+
+type Group = { source: SourceId; dir: string; sessions: SessionRef[] };
 
 /**
  * Adapter boundary: everything below talks to these two functions only.
  * In the Tauri build they become invoke() calls; the UI doesn't change.
  */
-async function fetchProjects(): Promise<ProjectRef[]> {
+async function fetchProjects(): Promise<Group[]> {
   const r = await fetch("/api/projects");
   if (!r.ok) throw new Error(`projects: ${r.status}`);
   return r.json();
@@ -20,7 +21,7 @@ async function fetchProjects(): Promise<ProjectRef[]> {
 
 async function fetchSession(file: string): Promise<string> {
   const r = await fetch(`/api/session?file=${encodeURIComponent(file)}`);
-  if (!r.ok) throw new Error(`session: ${r.status}`);
+  if (!r.ok) throw new Error(await r.text().catch(() => `session: ${r.status}`));
   return r.text();
 }
 
@@ -38,10 +39,12 @@ function fmtWhen(ms: number): string {
   });
 }
 
+type Selected = { ref: SessionRef; source: SourceId };
+
 export function App() {
-  const [projects, setProjects] = useState<ProjectRef[] | null>(null);
+  const [projects, setProjects] = useState<Group[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<SessionRef | null>(null);
+  const [selected, setSelected] = useState<Selected | null>(null);
   const [doc, setDoc] = useState<SessionDoc | null>(null);
   const [parsing, setParsing] = useState(false);
 
@@ -49,8 +52,9 @@ export function App() {
     fetchProjects()
       .then((p) => {
         setProjects(p);
-        const first = p[0]?.sessions[0];
-        if (first) setSelected(first);
+        const first = p[0];
+        if (first?.sessions[0])
+          setSelected({ ref: first.sessions[0], source: first.source });
       })
       .catch((e) => setLoadError(String(e)));
   }, []);
@@ -59,12 +63,16 @@ export function App() {
     if (!selected) return;
     let stale = false;
     setParsing(true);
-    fetchSession(selected.file)
+    setLoadError(null);
+    fetchSession(selected.ref.file)
       .then((raw) => {
-        if (!stale) setDoc(parseSession(raw));
+        if (!stale) setDoc(SOURCES[selected.source].parse(raw));
       })
       .catch((e) => {
-        if (!stale) setLoadError(String(e));
+        if (!stale) {
+          setDoc(null);
+          setLoadError(String(e));
+        }
       })
       .finally(() => {
         if (!stale) setParsing(false);
@@ -106,36 +114,45 @@ export function App() {
               No sessions found. Run Claude Code once, then reopen.
             </p>
           )}
-          {projects?.map((p) => (
-            <section key={p.dir}>
-              <h2
-                className="instrument truncate border-b border-rule bg-paper px-4 py-2"
-                title={prettyProjectName(p.dir)}
-              >
-                {prettyProjectName(p.dir)}
-              </h2>
-              <ul>
-                {p.sessions.map((s) => (
-                  <li key={s.file}>
-                    <button
-                      type="button"
-                      onClick={() => setSelected(s)}
-                      className={`block w-full border-b border-rule px-4 py-2.5 text-left transition-colors hover:bg-brass-wash ${
-                        selected?.file === s.file ? "bg-brass-wash" : ""
-                      }`}
-                    >
-                      <span className="tnum block font-mono text-xs text-ink-2">
-                        {fmtWhen(s.modified)}
-                      </span>
-                      <span className="tnum block font-mono text-[11px] text-ink-3">
-                        {fmtBytes(s.bytes)} · {s.id.slice(0, 8)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+          {projects?.map((p) => {
+            const label =
+              p.source === "claude" ? prettyProjectName(p.dir) : p.dir;
+            return (
+              <section key={`${p.source}:${p.dir}`}>
+                <h2
+                  className="flex items-baseline gap-2 border-b border-rule bg-paper px-4 py-2"
+                  title={label}
+                >
+                  <span className="instrument min-w-0 truncate">{label}</span>
+                  <span className="ml-auto shrink-0 rounded-sm border border-rule-strong px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                    {SOURCES[p.source]?.label ?? p.source}
+                  </span>
+                </h2>
+                <ul>
+                  {p.sessions.map((s) => (
+                    <li key={s.file}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelected({ ref: s, source: p.source })
+                        }
+                        className={`block w-full border-b border-rule px-4 py-2.5 text-left transition-colors hover:bg-brass-wash ${
+                          selected?.ref.file === s.file ? "bg-brass-wash" : ""
+                        }`}
+                      >
+                        <span className="tnum block font-mono text-xs text-ink-2">
+                          {fmtWhen(s.modified)}
+                        </span>
+                        <span className="tnum block font-mono text-[11px] text-ink-3">
+                          {fmtBytes(s.bytes)} · {s.id.slice(0, 8)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
         </nav>
 
         <footer className="border-t border-rule px-4 py-2">
@@ -147,7 +164,13 @@ export function App() {
       <main className="min-w-0 flex-1 overflow-y-auto">
         {parsing && <p className="instrument px-8 py-6">parsing…</p>}
         {!parsing && doc && (
-          <Notebook doc={doc} exportName={selected?.id.slice(0, 8) ?? "session"} />
+          <Notebook
+            doc={doc}
+            exportName={selected?.ref.id.slice(0, 8) ?? "session"}
+          />
+        )}
+        {!parsing && !doc && loadError && (
+          <p className="px-8 py-6 font-mono text-sm text-oxide">{loadError}</p>
         )}
         {!parsing && !doc && !loadError && (
           <div className="flex h-full items-center justify-center">

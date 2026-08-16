@@ -48,6 +48,8 @@ function toolSummary(t: ToolInteraction): string {
   switch (t.name) {
     case "Bash":
     case "PowerShell":
+    case "shell_command":
+    case "shell":
       return first("command").split("\n")[0].slice(0, 110);
     case "Read":
     case "Write":
@@ -145,7 +147,8 @@ export function exportSessionHtml(
     m.cwd,
     m.gitBranch ? `⎇ ${m.gitBranch}` : "",
     `${doc.cells.length} cells`,
-    `${tokens(m.totalOutputTokens)} tokens out`,
+    m.totalOutputTokens > 0 ? `${tokens(m.totalOutputTokens)} tokens out` : "",
+    m.agent ?? "",
     day,
   ]
     .filter(Boolean)

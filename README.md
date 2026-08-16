@@ -9,10 +9,28 @@ costs as outputs. Dense, legible, yours.
 
 > _foolscap: the paper ledgers were written on._
 
+## Harness-agnostic by design
+
+foolscap renders **agent sessions**, not one vendor's logs. Every harness is
+one adapter that maps its on-disk format into a neutral session document —
+the same notebook, whatever wrote it.
+
+| Harness | Status | Reads from |
+|---|---|---|
+| Claude Code | ✅ | `~/.claude/projects/**/*.jsonl` |
+| Codex CLI | ✅ | `~/.codex/sessions/**/rollout-*.jsonl` |
+| Gemini CLI | planned | — |
+| opencode | planned | — |
+| aider | planned | `.aider.chat.history.md` |
+
+**Add your harness:** an adapter is one file (`src/sources/yours.ts`)
+implementing `parse(raw) → SessionDoc` plus a discovery entry. If your
+agent writes a log, foolscap can be its notebook — PRs very welcome.
+
 ## What it does today (v0.1 — the Viewer)
 
-Point it at nothing. It finds every Claude Code session already on your disk
-(`~/.claude/projects/**.jsonl`) and renders your full history as documents:
+Point it at nothing. It finds every session already on your disk and
+renders your full history as documents:
 
 - Each prompt opens a numbered cell `[1]`, `[2]`, …
 - Tool calls as one-line ledger rows — click to expand inputs, results, errors
