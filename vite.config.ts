@@ -154,6 +154,50 @@ function sessionApi(): Plugin {
             return;
           }
 
+          if (url.pathname === "/api/search") {
+            const q = (url.searchParams.get("q") ?? "").toLowerCase();
+            if (q.length < 2) {
+              res.setHeader("content-type", "application/json");
+              res.end("[]");
+              return;
+            }
+            const groups = [
+              ...(await scanClaude(claudeRoot)),
+              ...(codexRoot ? await scanCodex(codexRoot) : []),
+            ];
+            const hits: unknown[] = [];
+            for (const g of groups) {
+              for (const s of g.sessions) {
+                if (s.bytes > MAX_SESSION_BYTES) continue;
+                const text = (await readFile(s.file, "utf8")).toLowerCase();
+                let count = 0;
+                let i = text.indexOf(q);
+                const firstHit = i;
+                while (i !== -1 && count < 500) {
+                  count++;
+                  i = text.indexOf(q, i + q.length);
+                }
+                if (count === 0) continue;
+                hits.push({
+                  source: g.source,
+                  dir: g.dir,
+                  ...s,
+                  count,
+                  snippet: text
+                    .slice(Math.max(0, firstHit - 60), firstHit + q.length + 90)
+                    .replace(/\\n/g, " ")
+                    .replace(/\s+/g, " "),
+                });
+              }
+            }
+            hits.sort(
+              (a, b) => (b as { count: number }).count - (a as { count: number }).count,
+            );
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify(hits.slice(0, 40)));
+            return;
+          }
+
           if (url.pathname === "/api/session") {
             const file = url.searchParams.get("file") ?? "";
             if (!allowed(file)) {

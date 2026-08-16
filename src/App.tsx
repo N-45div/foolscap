@@ -9,6 +9,13 @@ import { Notebook } from "./Notebook";
 
 type Group = { source: SourceId; dir: string; sessions: SessionRef[] };
 
+type SearchHit = SessionRef & {
+  source: SourceId;
+  dir: string;
+  count: number;
+  snippet: string;
+};
+
 /**
  * Adapter boundary: everything below talks to these two functions only.
  * In the Tauri build they become invoke() calls; the UI doesn't change.
@@ -23,6 +30,12 @@ async function fetchSession(file: string): Promise<string> {
   const r = await fetch(`/api/session?file=${encodeURIComponent(file)}`);
   if (!r.ok) throw new Error(await r.text().catch(() => `session: ${r.status}`));
   return r.text();
+}
+
+async function fetchSearch(q: string): Promise<SearchHit[]> {
+  const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+  if (!r.ok) throw new Error(`search: ${r.status}`);
+  return r.json();
 }
 
 function fmtBytes(n: number): string {
@@ -87,6 +100,28 @@ export function App() {
     [projects],
   );
 
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  const runSearch = () => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setHits(null);
+      return;
+    }
+    setSearching(true);
+    fetchSearch(q)
+      .then(setHits)
+      .catch((e) => setLoadError(String(e)))
+      .finally(() => setSearching(false));
+  };
+
+  const clearSearch = () => {
+    setQuery("");
+    setHits(null);
+  };
+
   return (
     <div className="flex h-dvh">
       {/* ── Sidebar: the archive ── */}
@@ -100,21 +135,83 @@ export function App() {
           </span>
         </header>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto">
-          {projects === null && !loadError && (
-            <p className="instrument px-4 py-6">reading ~/.claude …</p>
+        <search className="flex items-center gap-2 border-b border-rule px-4 py-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") runSearch();
+              if (e.key === "Escape") clearSearch();
+            }}
+            placeholder="search the archive…"
+            aria-label="Search all sessions"
+            className="min-w-0 flex-1 bg-transparent font-mono text-xs text-ink outline-none placeholder:text-ink-3"
+          />
+          {(hits !== null || query) && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="instrument hover:text-ink"
+              aria-label="Clear search"
+            >
+              esc
+            </button>
           )}
-          {loadError && (
+        </search>
+
+        <nav className="min-h-0 flex-1 overflow-y-auto">
+          {searching && <p className="instrument px-4 py-6">searching…</p>}
+          {!searching && hits !== null && (
+            <>
+              <p className="instrument tnum border-b border-rule bg-paper px-4 py-2">
+                {hits.length === 0
+                  ? "no matches"
+                  : `${hits.length} session${hits.length === 1 ? "" : "s"} match`}
+              </p>
+              <ul>
+                {hits.map((h) => (
+                  <li key={h.file}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelected({ ref: h, source: h.source })
+                      }
+                      className={`block w-full border-b border-rule px-4 py-2.5 text-left transition-colors hover:bg-brass-wash ${
+                        selected?.ref.file === h.file ? "bg-brass-wash" : ""
+                      }`}
+                    >
+                      <span className="flex items-baseline gap-2">
+                        <span className="tnum font-mono text-xs text-ink-2">
+                          {h.id.slice(0, 8)}
+                        </span>
+                        <span className="tnum ml-auto font-mono text-[10px] text-brass-bright">
+                          {h.count}×
+                        </span>
+                      </span>
+                      <span className="mt-0.5 line-clamp-2 block font-mono text-[11px] leading-relaxed text-ink-3">
+                        …{h.snippet}…
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {!searching && hits === null && projects === null && !loadError && (
+            <p className="instrument px-4 py-6">reading the archive…</p>
+          )}
+          {loadError && hits === null && (
             <p className="px-4 py-6 font-mono text-xs text-oxide">
               {loadError}
             </p>
           )}
-          {projects?.length === 0 && (
+          {hits === null && projects?.length === 0 && (
             <p className="px-4 py-6 font-mono text-xs text-ink-3">
               No sessions found. Run Claude Code once, then reopen.
             </p>
           )}
-          {projects?.map((p) => {
+          {hits === null && projects?.map((p) => {
             const label =
               p.source === "claude" ? prettyProjectName(p.dir) : p.dir;
             return (

@@ -65,6 +65,8 @@ Code or Codex, your archive is already there.
 
 - **Sessions as documents** — each prompt opens a numbered cell `[1]`,
   `[2]`, …; the agent's work nests inside it
+- **Search the whole archive** — every session, every harness, ranked by
+  match count with a snippet; Enter to search, Esc to clear
 - **Tool calls as ledger rows** — one line each, expandable to full
   inputs, results and errors
 - **Edits as diffs** — old/new rendered red/green
