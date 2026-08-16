@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Cell, SessionDoc, ToolInteraction } from "./model";
+import { downloadSessionHtml } from "./export";
 
 /**
  * A session rendered as a document: each prompt opens a numbered cell,
@@ -218,20 +219,26 @@ function CellView({ cell, index }: { cell: Cell; index: number }) {
 
 // ── Document ──────────────────────────────────────────────────────────
 
-export function Notebook({ doc }: { doc: SessionDoc }) {
+export function Notebook({
+  doc,
+  exportName,
+}: {
+  doc: SessionDoc;
+  exportName: string;
+}) {
   const m = doc.meta;
   return (
     <div>
       {/* Statement header — the provenance line */}
-      <header className="sticky top-0 z-10 border-b border-rule bg-paper/90 px-5 py-2 backdrop-blur-sm">
-        <p className="instrument tnum flex flex-wrap gap-x-4">
-          {m.cwd && <span>{m.cwd}</span>}
+      <header className="sticky top-0 z-10 flex items-baseline gap-4 border-b border-rule bg-paper/90 px-5 py-2 backdrop-blur-sm">
+        <p className="instrument tnum flex min-w-0 flex-1 flex-wrap gap-x-4">
+          {m.cwd && <span className="truncate">{m.cwd}</span>}
           {m.gitBranch && <span>⎇ {m.gitBranch}</span>}
           <span>{doc.cells.length} cells</span>
           <span>{fmtTokens(m.totalOutputTokens)} tokens out</span>
           {m.version && <span>cc {m.version}</span>}
           {m.startedAt && (
-            <span className="ml-auto">
+            <span>
               {new Date(m.startedAt).toLocaleDateString(undefined, {
                 day: "2-digit",
                 month: "short",
@@ -240,6 +247,14 @@ export function Notebook({ doc }: { doc: SessionDoc }) {
             </span>
           )}
         </p>
+        <button
+          type="button"
+          onClick={() => downloadSessionHtml(doc, exportName)}
+          title="Exports everything in this session, including tool inputs and results — review for secrets before sharing."
+          className="instrument shrink-0 border border-rule-strong px-2.5 py-1 transition-colors hover:border-brass-bright hover:text-brass-bright"
+        >
+          export html
+        </button>
       </header>
 
       {doc.cells.map((cell, i) => (

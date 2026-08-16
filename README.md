@@ -19,6 +19,10 @@ Point it at nothing. It finds every Claude Code session already on your disk
 - Edits rendered as red/green diffs
 - Thinking blocks collapsed by default
 - Token counts, timestamps, cwd, branch — tabular numerals throughout
+- **Export any session as a single self-contained HTML document** — no
+  JavaScript, no external requests, dark/light via your OS. Host it, mail
+  it, post it. ⚠️ Exports include tool inputs and results verbatim —
+  review for secrets before sharing.
 - **Read-only by construction.** It never writes to your session files.
 
 Zero configuration. If you've used Claude Code, you already have data.

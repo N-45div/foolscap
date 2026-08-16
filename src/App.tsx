@@ -146,7 +146,9 @@ export function App() {
       {/* ── The document ── */}
       <main className="min-w-0 flex-1 overflow-y-auto">
         {parsing && <p className="instrument px-8 py-6">parsing…</p>}
-        {!parsing && doc && <Notebook doc={doc} />}
+        {!parsing && doc && (
+          <Notebook doc={doc} exportName={selected?.id.slice(0, 8) ?? "session"} />
+        )}
         {!parsing && !doc && !loadError && (
           <div className="flex h-full items-center justify-center">
             <p className="font-mono text-sm text-ink-3">
