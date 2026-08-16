@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { existsSync } from "node:fs";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -116,14 +117,26 @@ async function scanCodex(root: string): Promise<Group[]> {
 function sessionApi(): Plugin {
   // FOOLSCAP_ROOT points the viewer at a curated archive (fixtures,
   // copies from another machine). When set, ONLY that root is scanned —
-  // no other source can leak into a curated view.
+  // no other source can leak into a curated view. Layouts:
+  //   <root>/claude/... + <root>/codex/...   per-source subdirs
+  //   <root>/...                             legacy: claude-style projects
   const fixtureRoot = process.env.FOOLSCAP_ROOT;
-  const claudeRoot = fixtureRoot ?? join(homedir(), ".claude", "projects");
-  const codexRoot = join(homedir(), ".codex", "sessions");
+  let claudeRoot: string;
+  let codexRoot: string | null;
+  if (fixtureRoot) {
+    const c = join(fixtureRoot, "claude");
+    const x = join(fixtureRoot, "codex");
+    claudeRoot = existsSync(c) ? c : fixtureRoot;
+    codexRoot = existsSync(x) ? x : null;
+  } else {
+    claudeRoot = join(homedir(), ".claude", "projects");
+    codexRoot = join(homedir(), ".codex", "sessions");
+  }
 
   const allowed = (file: string): boolean =>
     file.endsWith(".jsonl") &&
-    (file.startsWith(claudeRoot) || (!fixtureRoot && file.startsWith(codexRoot)));
+    (file.startsWith(claudeRoot) ||
+      (codexRoot !== null && file.startsWith(codexRoot)));
 
   return {
     name: "foolscap-session-api",
@@ -134,7 +147,7 @@ function sessionApi(): Plugin {
           if (url.pathname === "/api/projects") {
             const groups = [
               ...(await scanClaude(claudeRoot)),
-              ...(fixtureRoot ? [] : await scanCodex(codexRoot)),
+              ...(codexRoot ? await scanCodex(codexRoot) : []),
             ];
             res.setHeader("content-type", "application/json");
             res.end(JSON.stringify(groups));

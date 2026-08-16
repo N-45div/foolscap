@@ -1,19 +1,41 @@
 # foolscap
 
-**The notebook for coding agents.**
+**The notebook for coding agents.** Your agent sessions, rendered as
+documents — dense, replayable, shareable.
+
+![MIT license](https://img.shields.io/badge/license-MIT-b8860b)
+![Works with](https://img.shields.io/badge/works%20with-claude%20code%20·%20codex-1a1a1a)
+![PRs welcome](https://img.shields.io/badge/PRs-welcome-2f6349)
+
+![A Codex session rendered as a foolscap document](docs/screenshot.png)
 
 Jupyter didn't beat the REPL with a prettier terminal — it turned sessions
-into documents. Agent sessions deserve the same: every run a notebook you can
-read top-to-bottom, replay, and share. Prompts as cells; diffs, tool calls and
-costs as outputs. Dense, legible, yours.
+into **documents**. Agent sessions deserve the same. Every run becomes a
+notebook you can read top-to-bottom, audit, and hand to someone else:
+prompts as numbered cells; diffs, tool calls, thinking and costs as outputs
+nested inside them.
 
 > _foolscap: the paper ledgers were written on._
 
-## Harness-agnostic by design
+---
 
-foolscap renders **agent sessions**, not one vendor's logs. Every harness is
-one adapter that maps its on-disk format into a neutral session document —
-the same notebook, whatever wrote it.
+## Why
+
+Terminals are superb for issuing precise commands and terrible for reading
+what an agent *did*. The record of hours of agent work — every edit, every
+command, every decision — disappears into scrollback, or into JSONL files
+nobody opens. That record deserves to be a legible artifact:
+
+- **Reviewable** — see every change an agent made, as diffs, in context
+- **Recallable** — "what did we do in Tuesday's session?" has an answer
+- **Shareable** — a session exports to one self-contained HTML file
+- **Yours** — local-first; your sessions never leave your disk
+
+## Supported harnesses
+
+foolscap is **harness-agnostic by design**: every harness is one adapter
+that maps its on-disk log format into a neutral session document. The
+renderer, exporter and skill never know which tool wrote the session.
 
 | Harness | Status | Reads from |
 |---|---|---|
@@ -23,78 +45,143 @@ the same notebook, whatever wrote it.
 | opencode | planned | — |
 | aider | planned | `.aider.chat.history.md` |
 
-**Add your harness:** an adapter is one file (`src/sources/yours.ts`)
-implementing `parse(raw) → SessionDoc` plus a discovery entry. If your
-agent writes a log, foolscap can be its notebook — PRs very welcome.
+Your harness missing? [Adding one is a single file](#add-a-harness).
 
-## What it does today (v0.1 — the Viewer)
+## Quickstart
 
-Point it at nothing. It finds every session already on your disk and
-renders your full history as documents:
-
-- Each prompt opens a numbered cell `[1]`, `[2]`, …
-- Tool calls as one-line ledger rows — click to expand inputs, results, errors
-- Edits rendered as red/green diffs
-- Thinking blocks collapsed by default
-- Token counts, timestamps, cwd, branch — tabular numerals throughout
-- **Export any session as a single self-contained HTML document** — no
-  JavaScript, no external requests, dark/light via your OS. Host it, mail
-  it, post it. ⚠️ Exports include tool inputs and results verbatim —
-  review for secrets before sharing.
-- **Read-only by construction.** It never writes to your session files.
-
-Zero configuration. If you've used Claude Code, you already have data.
-
-## Run it
+Requires Node 24+ and pnpm.
 
 ```sh
+git clone https://github.com/N-45div/foolscap
+cd foolscap
 pnpm install
 pnpm dev
 ```
 
-Open http://localhost:5173. Windows-first, works everywhere Node does.
-Assistant turns render as real markdown — headings, tables, code fences —
-sanitized before display (transcripts are untrusted text).
+Open http://localhost:5173. **Zero configuration** — if you've used Claude
+Code or Codex, your archive is already there.
 
-## CLI (Node 24+, no build step)
+## Features
+
+- **Sessions as documents** — each prompt opens a numbered cell `[1]`,
+  `[2]`, …; the agent's work nests inside it
+- **Tool calls as ledger rows** — one line each, expandable to full
+  inputs, results and errors
+- **Edits as diffs** — old/new rendered red/green
+- **Markdown, rendered** — the agent's answers display as real documents
+  (headings, tables, code fences), sanitized before display
+- **Thinking, collapsed** — reasoning is there when you want it, out of
+  the way when you don't
+- **Provenance header** — cwd, branch, harness + version, cell count,
+  token totals where the format records them; tabular numerals throughout
+- **Read-only by construction** — foolscap never writes to session files
+
+## Export
+
+One button (or one command) renders a session to a **single self-contained
+HTML file**: no JavaScript, no external requests, dark/light from the
+reader's OS, expand/collapse via native `<details>`. Host it, mail it,
+attach it to a PR.
+
+> ⚠️ Exports include tool inputs and results **verbatim** — review for
+> secrets (keys, env vars, tokens) before sharing.
+
+## CLI
+
+No build step — Node 24 runs the TypeScript directly:
 
 ```sh
 node cli.ts list                          # recent sessions, newest first
-node cli.ts export latest -o session.html # shareable document from the CLI
+node cli.ts export latest -o session.html # shareable document
 node cli.ts path <id-prefix>              # locate a session's JSONL
 ```
 
+(CLI currently covers the Claude Code archive; multi-source is on the
+roadmap.)
+
 ## Agent skill
 
-`skills/foolscap/SKILL.md` teaches a Claude Code agent to recall, summarize
-and export your past sessions — "what did we do yesterday?" becomes a
-question your agent can answer. Install:
+`skills/foolscap/SKILL.md` teaches a Claude Code agent to operate the
+archive itself — recall, summarize and export past sessions:
 
 ```sh
 cp -r skills/foolscap ~/.claude/skills/foolscap
 ```
 
-Read-only by design; the skill is instructed never to modify session files
-and never to share an export without your explicit say-so.
+Then ask your agent things like *"what did we change in yesterday's
+session?"*. The skill is read-only by instruction and never shares an
+export without your explicit say-so.
 
-## Where this is going
+## Architecture
 
-- **v0.2 — Drive.** Start and steer live sessions via the Claude Agent SDK.
-  Parallel agents in worktrees, one dense fleet view.
+Three layers; the middle one is the point.
+
+```
+adapters                 the document            surfaces
+src/sources/*.ts   →     SessionDoc        →     viewer · export · CLI · skill
+(one per harness)        (neutral model)         (never know the harness)
+```
+
+An adapter implements one function:
+
+```ts
+parse(raw: string): SessionDoc
+```
+
+plus a discovery entry that says where its files live. Parsing is
+deliberately tolerant — unknown entry types are skipped, malformed lines
+are counted, and a session that half-parses renders half a notebook, never
+a blank screen.
+
+### Custom archive roots
+
+`FOOLSCAP_ROOT` points the viewer at any directory — a copied archive from
+another machine, a backup, a fixture set:
+
+```sh
+FOOLSCAP_ROOT=/path/to/archive pnpm dev
+```
+
+Two layouts are understood: per-source subdirectories (`<root>/claude/…`,
+`<root>/codex/…`) or a bare Claude-style projects directory. When
+`FOOLSCAP_ROOT` is set, **only** that root is scanned.
+
+## Add a harness
+
+The ideal first contribution. To support a new agent tool:
+
+1. **`src/sources/yours.ts`** — implement `parse(raw): SessionDoc`.
+   Map prompts to cells, tool invocations to `ToolInteraction`s (pair
+   calls with results by id), reasoning to `thinking` parts. Be tolerant:
+   never throw on a malformed line.
+2. **Register it** in `src/sources/index.ts` (id + label + parser).
+3. **Add discovery** in `vite.config.ts` — where the files live, how to
+   group them into projects.
+4. Open a PR with a small **synthetic** fixture file (never real session
+   data — transcripts contain private material).
+
+If your agent writes a log, foolscap can be its notebook.
+
+## Roadmap
+
+- **v0.2 — Drive.** Start and steer live sessions via the Claude Agent
+  SDK; parallel agents in worktrees on one dense fleet view; subagent
+  sidechains rendered as nested documents.
 - **v0.3 — The notebook earns its name.** Re-run a cell with an edited
-  prompt, fork a session from any point, session diffing, shareable exports.
-- **Self-contained app.** Tauri wrapper (Rust core) — one small binary you
-  can run anywhere.
+  prompt, fork a session from any point, session diffing, search across
+  the archive.
+- **Self-contained app.** Tauri wrapper (Rust core) — one small binary,
+  no Node required.
+- More harnesses: Gemini CLI, opencode, aider, and yours.
 
-## Why
+## Philosophy
 
-Terminals are great for quick and precise commands. They are a poor default
-modality for reading what an agent *did* — information density is too low,
-and the record of the work disappears into scrollback. The record deserves to
-be a document.
-
-Local-first: your sessions stay on your disk, Obsidian-style.
+Local-first, Obsidian-style: the archive is files on your disk, and
+foolscap is a lens over them — never a database, never a cloud. Read-only
+against session files, always. Sessions contain private material, so
+nothing leaves your machine unless you explicitly export it, and exports
+warn you to review before sharing.
 
 ## License
 
-MIT
+[MIT](LICENSE)
