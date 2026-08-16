@@ -94,13 +94,19 @@ ${body}
 </details>`;
 }
 
-function cellHtml(cell: Cell, index: number): string {
+/** Optional markdown renderer — the browser injects marked+DOMPurify;
+    Node callers omit it and get escaped plain text. Must sanitize. */
+type MdRender = (text: string) => string;
+
+function cellHtml(cell: Cell, index: number, md?: MdRender): string {
   const toolCount = cell.parts.filter((p) => p.kind === "tool").length;
 
   const parts = cell.parts
     .map((p) => {
       if (p.kind === "text")
-        return `<div class="say">${esc(clip(p.text, 12_000))}</div>`;
+        return md
+          ? `<div class="say md">${md(clip(p.text, 12_000))}</div>`
+          : `<div class="say plain">${esc(clip(p.text, 12_000))}</div>`;
       if (p.kind === "thinking")
         return `<details class="think"><summary>thinking</summary><div>${esc(clip(p.text, 3000))}</div></details>`;
       return toolHtml(p.tool, p.at);
@@ -121,7 +127,11 @@ ${parts}
 </article>`;
 }
 
-export function exportSessionHtml(doc: SessionDoc, title: string): string {
+export function exportSessionHtml(
+  doc: SessionDoc,
+  title: string,
+  md?: MdRender,
+): string {
   const m = doc.meta;
   const day = m.startedAt
     ? new Date(m.startedAt).toLocaleDateString(undefined, {
@@ -162,7 +172,22 @@ body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 ui-sans-ser
 .at{color:var(--ink3);font-size:10px;padding-top:3px}
 .prompt{white-space:pre-wrap;font-size:13.5px;margin:0}
 .cellstats{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:10px 0 2px}
-.say{white-space:pre-wrap;max-width:80ch;padding:8px 0;font-size:14px}
+.say{max-width:80ch;padding:8px 0;font-size:14px}
+.say.plain{white-space:pre-wrap}
+.md :is(h1,h2,h3,h4){font-weight:700;margin:1.1em 0 .4em;line-height:1.25}
+.md h1{font-size:1.25rem}.md h2{font-size:1.1rem}.md h3,.md h4{font-size:1rem}
+.md p{margin:.5em 0}
+.md a{color:var(--brassb);text-decoration:underline;text-underline-offset:2px}
+.md ul,.md ol{margin:.5em 0;padding-left:1.4em}
+.md li{margin:.2em 0}
+.md code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.86em;background:var(--sunk);border:1px solid var(--rule);padding:.08em .35em;border-radius:2px}
+.md pre{background:var(--sunk);color:var(--ink2)}
+.md pre code{background:none;border:none;padding:0}
+.md blockquote{border-left:2px solid var(--rule);margin:.6em 0;padding-left:1em;color:var(--ink2)}
+.md table{border-collapse:collapse;margin:.6em 0;display:block;overflow-x:auto}
+.md th,.md td{border:1px solid var(--rule);padding:.3em .7em;font-size:.85rem;text-align:left}
+.md th{background:var(--sunk);font-weight:600}
+.md :first-child{margin-top:0}.md :last-child{margin-bottom:0}
 details.tool{border-bottom:1px solid var(--rule)}
 details.tool:last-child{border-bottom:0}
 details.tool>summary{display:grid;grid-template-columns:6.5rem 1fr auto;gap:12px;align-items:baseline;padding:6px 4px;cursor:pointer;list-style:none;font-size:12px}
@@ -186,7 +211,7 @@ details.think>div{white-space:pre-wrap;border-left:2px solid var(--rule);padding
 <body>
 <div class="doc">
 <div class="provenance">${provenance}</div>
-${doc.cells.map(cellHtml).join("\n")}
+${doc.cells.map((c, i) => cellHtml(c, i, md)).join("\n")}
 <p class="foot">session document · rendered by <a href="https://github.com/N-45div/foolscap">foolscap</a> — the notebook for coding agents</p>
 </div>
 </body>
@@ -194,8 +219,14 @@ ${doc.cells.map(cellHtml).join("\n")}
 }
 
 /** Trigger a browser download of the exported document. */
-export function downloadSessionHtml(doc: SessionDoc, name: string): void {
-  const html = exportSessionHtml(doc, `${name} — foolscap`);
+export async function downloadSessionHtml(
+  doc: SessionDoc,
+  name: string,
+): Promise<void> {
+  // Loaded here, not at module top: keeps exportSessionHtml importable
+  // from Node (the CLI), where DOMPurify has no DOM to purify with.
+  const { markdownForExport } = await import("./markdown");
+  const html = exportSessionHtml(doc, `${name} — foolscap`, markdownForExport);
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

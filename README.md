@@ -35,6 +35,29 @@ pnpm dev
 ```
 
 Open http://localhost:5173. Windows-first, works everywhere Node does.
+Assistant turns render as real markdown — headings, tables, code fences —
+sanitized before display (transcripts are untrusted text).
+
+## CLI (Node 24+, no build step)
+
+```sh
+node cli.ts list                          # recent sessions, newest first
+node cli.ts export latest -o session.html # shareable document from the CLI
+node cli.ts path <id-prefix>              # locate a session's JSONL
+```
+
+## Agent skill
+
+`skills/foolscap/SKILL.md` teaches a Claude Code agent to recall, summarize
+and export your past sessions — "what did we do yesterday?" becomes a
+question your agent can answer. Install:
+
+```sh
+cp -r skills/foolscap ~/.claude/skills/foolscap
+```
+
+Read-only by design; the skill is instructed never to modify session files
+and never to share an export without your explicit say-so.
 
 ## Where this is going
 

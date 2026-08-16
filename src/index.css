@@ -113,3 +113,59 @@
     background: var(--brass-wash);
   }
 }
+
+/* Rendered markdown from assistant turns — document typography, not chat. */
+@layer components {
+  .md :is(h1, h2, h3, h4) {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 1.1em 0 0.4em;
+    line-height: 1.25;
+  }
+  .md h1 { font-size: 1.25rem; }
+  .md h2 { font-size: 1.1rem; }
+  .md h3, .md h4 { font-size: 1rem; }
+  .md p { margin: 0.5em 0; }
+  .md a {
+    color: var(--brass-bright);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .md ul, .md ol { margin: 0.5em 0; padding-left: 1.4em; }
+  .md li { margin: 0.2em 0; }
+  .md code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    padding: 0.08em 0.35em;
+    border-radius: 2px;
+  }
+  .md pre {
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    padding: 0.7em 1em;
+    margin: 0.6em 0;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.55;
+  }
+  .md pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .md blockquote {
+    border-left: 2px solid var(--rule-strong);
+    margin: 0.6em 0;
+    padding-left: 1em;
+    color: var(--ink-2);
+  }
+  .md table { border-collapse: collapse; margin: 0.6em 0; display: block; overflow-x: auto; }
+  .md th, .md td {
+    border: 1px solid var(--rule);
+    padding: 0.3em 0.7em;
+    font-size: 0.85rem;
+    text-align: left;
+  }
+  .md th { background: var(--paper-sunk); font-weight: 600; }
+  .md hr { border: 0; border-top: 1px solid var(--rule); margin: 1em 0; }
+  .md :first-child { margin-top: 0; }
+  .md :last-child { margin-bottom: 0; }
+}

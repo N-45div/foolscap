@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Cell, SessionDoc, ToolInteraction } from "./model";
 import { downloadSessionHtml } from "./export";
+import { Markdown } from "./markdown";
 
 /**
  * A session rendered as a document: each prompt opens a numbered cell,
@@ -190,14 +191,7 @@ function CellView({ cell, index }: { cell: Cell; index: number }) {
 
         {cell.parts.map((part, i) => {
           if (part.kind === "text") {
-            return (
-              <p
-                key={i}
-                className="max-w-[80ch] whitespace-pre-wrap py-2 text-sm leading-relaxed text-ink"
-              >
-                {part.text}
-              </p>
-            );
+            return <Markdown key={i} text={part.text} />;
           }
           if (part.kind === "thinking") {
             if (!showThinking) return null;
