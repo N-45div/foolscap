@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/*
+  Instrument palette, dark-first. Sessions read like lab documents:
+  hairline rules, mono for anything the machine said or did, tabular
+  numerals wherever digits align. Light theme supported via tokens.
+*/
+:root {
+  --paper: #f1f3f2;
+  --paper-raised: #ffffff;
+  --paper-sunk: #e7eae9;
+  --ink: #11151a;
+  --ink-2: #3d464f;
+  --ink-3: #6b767f;
+  --rule: #d3d8d8;
+  --rule-strong: #b9c0c0;
+  --brass: #96601f;
+  --brass-bright: #a96f2e;
+  --brass-wash: rgb(150 96 31 / 0.09);
+  --oxide: #a63722;
+  --oxide-wash: rgb(166 55 34 / 0.08);
+  --moss: #2f6349;
+  --moss-wash: rgb(47 99 73 / 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --paper: #0f1317;
+    --paper-raised: #171c21;
+    --paper-sunk: #0a0d10;
+    --ink: #edefee;
+    --ink-2: #aeb7bc;
+    --ink-3: #79848b;
+    --rule: #262d33;
+    --rule-strong: #38424a;
+    --brass: #d6a05c;
+    --brass-bright: #e3b173;
+    --brass-wash: rgb(214 160 92 / 0.09);
+    --oxide: #e1745c;
+    --oxide-wash: rgb(225 116 92 / 0.1);
+    --moss: #6fbf97;
+    --moss-wash: rgb(111 191 151 / 0.08);
+  }
+}
+
+:root.dark {
+  --paper: #0f1317;
+  --paper-raised: #171c21;
+  --paper-sunk: #0a0d10;
+  --ink: #edefee;
+  --ink-2: #aeb7bc;
+  --ink-3: #79848b;
+  --rule: #262d33;
+  --rule-strong: #38424a;
+  --brass: #d6a05c;
+  --brass-bright: #e3b173;
+  --brass-wash: rgb(214 160 92 / 0.09);
+  --oxide: #e1745c;
+  --oxide-wash: rgb(225 116 92 / 0.1);
+  --moss: #6fbf97;
+  --moss-wash: rgb(111 191 151 / 0.08);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunk: var(--paper-sunk);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-brass: var(--brass);
+  --color-brass-bright: var(--brass-bright);
+  --color-brass-wash: var(--brass-wash);
+  --color-oxide: var(--oxide);
+  --color-oxide-wash: var(--oxide-wash);
+  --color-moss: var(--moss);
+  --color-moss-wash: var(--moss-wash);
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono",
+    Menlo, Consolas, monospace;
+}
+
+@layer base {
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    overflow-x: clip;
+  }
+
+  .tnum {
+    font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: "lnum" 1, "tnum" 1;
+  }
+
+  .instrument {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  :where(a, button, input, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--brass-bright);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--brass-wash);
+  }
+}
