@@ -13,7 +13,9 @@ import { join } from "node:path";
  * Read-only by construction — this app never writes to session files.
  */
 function sessionApi(): Plugin {
-  const root = join(homedir(), ".claude", "projects");
+  // FOOLSCAP_ROOT points the viewer at any archive directory — a copied
+  // archive from another machine, a shared fixture set, a backup.
+  const root = process.env.FOOLSCAP_ROOT ?? join(homedir(), ".claude", "projects");
 
   return {
     name: "foolscap-session-api",
