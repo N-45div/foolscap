@@ -1,13 +1,41 @@
 {
   "name": "foolscap",
-  "private": true,
   "version": "0.1.0",
   "type": "module",
   "description": "The notebook for coding agents. Your agent sessions, rendered as documents — dense, replayable, shareable.",
+  "bin": {
+    "foolscap": "./bin/foolscap.mjs"
+  },
+  "files": [
+    "bin",
+    "server",
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/N-45div/foolscap.git"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "coding-agents",
+    "sessions",
+    "notebook",
+    "viewer",
+    "local-first"
+  ],
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "dompurify": "^3.4.13",

@@ -49,17 +49,26 @@ Your harness missing? [Adding one is a single file](#add-a-harness).
 
 ## Quickstart
 
-Requires Node 24+ and pnpm.
+One command, no clone (Node 20+):
+
+```sh
+npx foolscap
+```
+
+It serves on **127.0.0.1 only** — your sessions are private data and never
+leave your machine — and opens the viewer on your archive. **Zero
+configuration**: if you've used Claude Code or Codex, it's already there.
+`foolscap --root <dir>` views a copied or curated archive; `--port` and
+`--no-open` do what they say.
+
+For development (Node 24+ and pnpm):
 
 ```sh
 git clone https://github.com/N-45div/foolscap
 cd foolscap
 pnpm install
-pnpm dev
+pnpm dev        # http://localhost:5173
 ```
-
-Open http://localhost:5173. **Zero configuration** — if you've used Claude
-Code or Codex, your archive is already there.
 
 ## Features
 
