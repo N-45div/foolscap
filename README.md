@@ -116,8 +116,10 @@ roadmap.)
 archive itself — recall, summarize and export past sessions:
 
 ```sh
-cp -r skills/foolscap ~/.claude/skills/foolscap
+npx foolscap skill
 ```
+
+(or from a clone: `cp -r skills/foolscap ~/.claude/skills/foolscap`)
 
 Then ask your agent things like *"what did we change in yesterday's
 session?"*. The skill is read-only by instruction and never shares an
