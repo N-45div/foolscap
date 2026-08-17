@@ -130,7 +130,7 @@ async function scanCodex(root) {
   });
 }
 
-async function scanAll(roots) {
+export async function scanAll(roots) {
   return [
     ...(await scanClaude(roots.claudeRoot)),
     ...(roots.codexRoot ? await scanCodex(roots.codexRoot) : []),
