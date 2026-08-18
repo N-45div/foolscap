@@ -78,6 +78,9 @@ pnpm dev        # http://localhost:5173
   match count with a snippet; Enter to search, Esc to clear
 - **Tool calls as ledger rows** — one line each, expandable to full
   inputs, results and errors
+- **Subagent fan-outs as nested documents** — every `Agent` call opens
+  into the transcript of the agent it launched, recursively, loaded on
+  demand
 - **Edits as diffs** — old/new rendered red/green
 - **Markdown, rendered** — the agent's answers display as real documents
   (headings, tables, code fences), sanitized before display
