@@ -264,6 +264,7 @@ export function App() {
           <Notebook
             doc={doc}
             exportName={selected?.ref.id.slice(0, 8) ?? "session"}
+            sessionFile={selected?.ref.file}
           />
         )}
         {!parsing && !doc && loadError && (

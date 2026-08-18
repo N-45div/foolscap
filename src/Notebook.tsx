@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { parseSession } from "./model";
 import type { Cell, SessionDoc, ToolInteraction } from "./model";
 import { downloadSessionHtml } from "./export";
 import { Markdown } from "./markdown";
@@ -83,7 +84,15 @@ function EditDiff({ input }: { input: Record<string, unknown> }) {
   );
 }
 
-function ToolBlock({ tool, at }: { tool: ToolInteraction; at?: string }) {
+function ToolBlock({
+  tool,
+  at,
+  sessionFile,
+}: {
+  tool: ToolInteraction;
+  at?: string;
+  sessionFile?: string;
+}) {
   const [open, setOpen] = useState(false);
   const summary = toolSummary(tool);
   const hasBody =
@@ -140,6 +149,100 @@ function ToolBlock({ tool, at }: { tool: ToolInteraction; at?: string }) {
               {tool.result.slice(0, 8000)}
             </pre>
           )}
+          {tool.subagentId && (
+            <SubagentSection
+              subagentId={tool.subagentId}
+              inline={tool.subagent}
+              sessionFile={sessionFile}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A subagent's transcript, rendered as a nested document inside the
+ * Agent call that launched it. Modern sessions store these as separate
+ * files (<session-id>/subagents/agent-<id>.jsonl), so the transcript is
+ * fetched on demand; older in-file sidechains arrive pre-parsed.
+ */
+function SubagentSection({
+  subagentId,
+  inline,
+  sessionFile,
+}: {
+  subagentId: string;
+  inline?: SessionDoc;
+  sessionFile?: string;
+}) {
+  const [doc, setDoc] = useState<SessionDoc | null>(inline ?? null);
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<"idle" | "loading" | "missing">("idle");
+
+  const toggle = async () => {
+    if (doc) {
+      setOpen(!open);
+      return;
+    }
+    if (!sessionFile) return;
+    setState("loading");
+    // All subagent files live flat under the top session's directory,
+    // so the original session file stays the base even when nesting.
+    const sep = sessionFile.includes("\\") ? "\\" : "/";
+    const base = sessionFile.replace(/\.jsonl$/i, "");
+    const path = `${base}${sep}subagents${sep}agent-${subagentId}.jsonl`;
+    try {
+      const r = await fetch(`/api/session?file=${encodeURIComponent(path)}`);
+      if (!r.ok) throw new Error(String(r.status));
+      setDoc(parseSession(await r.text()));
+      setOpen(true);
+      setState("idle");
+    } catch {
+      setState("missing");
+    }
+  };
+
+  const toolCount =
+    doc?.cells.reduce(
+      (n, c) => n + c.parts.filter((p) => p.kind === "tool").length,
+      0,
+    ) ?? 0;
+
+  if (state === "missing") {
+    return (
+      <p className="instrument mt-2">
+        ⑂ {subagentId.slice(0, 9)} · transcript not found on disk
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="instrument border border-rule-strong px-2.5 py-1 transition-colors hover:border-brass-bright hover:text-brass-bright"
+      >
+        ⑂ subagent {subagentId.slice(0, 9)}
+        {state === "loading" && " · loading…"}
+        {doc &&
+          ` · ${doc.cells.length} ${doc.cells.length === 1 ? "cell" : "cells"} · ${toolCount} tool calls`}
+        {!doc && state === "idle" && " · open transcript"}
+      </button>
+
+      {open && doc && (
+        <div className="mt-2 border-l-2 border-rule-strong pl-3 text-[0.95em]">
+          {doc.cells.map((cell, i) => (
+            <CellView
+              key={i}
+              cell={cell}
+              index={i}
+              sessionFile={sessionFile}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -148,7 +251,15 @@ function ToolBlock({ tool, at }: { tool: ToolInteraction; at?: string }) {
 
 // ── Cells ─────────────────────────────────────────────────────────────
 
-function CellView({ cell, index }: { cell: Cell; index: number }) {
+function CellView({
+  cell,
+  index,
+  sessionFile,
+}: {
+  cell: Cell;
+  index: number;
+  sessionFile?: string;
+}) {
   const [showThinking, setShowThinking] = useState(false);
   const toolCount = cell.parts.filter((p) => p.kind === "tool").length;
   const thinkingCount = cell.parts.filter((p) => p.kind === "thinking").length;
@@ -206,7 +317,14 @@ function CellView({ cell, index }: { cell: Cell; index: number }) {
               </p>
             );
           }
-          return <ToolBlock key={part.tool.id} tool={part.tool} at={part.at} />;
+          return (
+            <ToolBlock
+              key={part.tool.id}
+              tool={part.tool}
+              at={part.at}
+              sessionFile={sessionFile}
+            />
+          );
         })}
       </div>
     </article>
@@ -218,9 +336,11 @@ function CellView({ cell, index }: { cell: Cell; index: number }) {
 export function Notebook({
   doc,
   exportName,
+  sessionFile,
 }: {
   doc: SessionDoc;
   exportName: string;
+  sessionFile?: string;
 }) {
   const m = doc.meta;
   return (
@@ -256,7 +376,7 @@ export function Notebook({
       </header>
 
       {doc.cells.map((cell, i) => (
-        <CellView key={i} cell={cell} index={i} />
+        <CellView key={i} cell={cell} index={i} sessionFile={sessionFile} />
       ))}
 
       {doc.cells.length === 0 && (
