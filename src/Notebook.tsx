@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { parseSession } from "./model";
 import type { Cell, SessionDoc, ToolInteraction } from "./model";
 import { downloadSessionHtml } from "./export";
@@ -255,22 +255,51 @@ function CellView({
   cell,
   index,
   sessionFile,
+  anchor,
+  active,
+  refCb,
 }: {
   cell: Cell;
   index: number;
   sessionFile?: string;
+  /** Anchor id for permalinks — only top-level cells get one. */
+  anchor?: string;
+  active?: boolean;
+  refCb?: (el: HTMLElement | null) => void;
 }) {
   const [showThinking, setShowThinking] = useState(false);
   const toolCount = cell.parts.filter((p) => p.kind === "tool").length;
   const thinkingCount = cell.parts.filter((p) => p.kind === "thinking").length;
 
   return (
-    <article className="border-b border-rule">
+    <article
+      id={anchor}
+      ref={refCb}
+      className={`scroll-mt-10 border-b border-rule border-l-2 ${
+        active ? "border-l-brass-bright" : "border-l-transparent"
+      }`}
+    >
       {/* Prompt — the cell input */}
       <header className="grid grid-cols-[3rem_1fr_auto] gap-3 bg-paper-sunk px-5 py-3">
-        <span className="tnum pt-0.5 font-mono text-xs text-brass-bright">
-          [{index + 1}]
-        </span>
+        {anchor ? (
+          <a
+            href={`#${anchor}`}
+            title="Permalink to this cell (copies link)"
+            onClick={() => {
+              // Let the hash land first, then copy the full URL.
+              setTimeout(() => {
+                navigator.clipboard?.writeText(location.href).catch(() => {});
+              }, 0);
+            }}
+            className="tnum pt-0.5 font-mono text-xs text-brass-bright hover:underline"
+          >
+            [{index + 1}]
+          </a>
+        ) : (
+          <span className="tnum pt-0.5 font-mono text-xs text-brass-bright">
+            [{index + 1}]
+          </span>
+        )}
         <p className="whitespace-pre-wrap font-mono text-sm leading-relaxed">
           {cell.prompt.length > 2000
             ? cell.prompt.slice(0, 2000) + " …"
@@ -343,6 +372,63 @@ export function Notebook({
   sessionFile?: string;
 }) {
   const m = doc.meta;
+  const [active, setActive] = useState<number | null>(null);
+  const cellRefs = useRef<Array<HTMLElement | null>>([]);
+
+  const cellFromHash = (): number | null => {
+    const h = /^#cell-(\d+)$/.exec(location.hash);
+    if (!h) return null;
+    const i = Number(h[1]) - 1;
+    return i >= 0 && i < doc.cells.length ? i : null;
+  };
+
+  // New session: reset, then honor a #cell-N deep link if one is set.
+  useEffect(() => {
+    cellRefs.current.length = doc.cells.length;
+    const i = cellFromHash();
+    setActive(i);
+    if (i !== null) {
+      requestAnimationFrame(() => cellRefs.current[i]?.scrollIntoView());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc]);
+
+  // Clicking a [n] permalink (or pasting a link) moves the active mark.
+  useEffect(() => {
+    const onHash = () => setActive(cellFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc]);
+
+  // j/k walk the cells, notebook-style.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
+      )
+        return;
+      if (e.key !== "j" && e.key !== "k") return;
+      e.preventDefault();
+      setActive((prev) => {
+        const next =
+          e.key === "j"
+            ? Math.min((prev ?? -1) + 1, doc.cells.length - 1)
+            : Math.max((prev ?? 1) - 1, 0);
+        cellRefs.current[next]?.scrollIntoView({
+          block: "start",
+          behavior: "smooth",
+        });
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [doc]);
+
   return (
     <div>
       {/* Statement header — the provenance line */}
@@ -365,6 +451,12 @@ export function Notebook({
             </span>
           )}
         </p>
+        <span
+          className="instrument tnum shrink-0"
+          title="Keyboard: j / k step through cells; [n] is a permalink"
+        >
+          j·k
+        </span>
         <button
           type="button"
           onClick={() => downloadSessionHtml(doc, exportName)}
@@ -376,7 +468,17 @@ export function Notebook({
       </header>
 
       {doc.cells.map((cell, i) => (
-        <CellView key={i} cell={cell} index={i} sessionFile={sessionFile} />
+        <CellView
+          key={i}
+          cell={cell}
+          index={i}
+          sessionFile={sessionFile}
+          anchor={`cell-${i + 1}`}
+          active={active === i}
+          refCb={(el) => {
+            cellRefs.current[i] = el;
+          }}
+        />
       ))}
 
       {doc.cells.length === 0 && (

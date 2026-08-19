@@ -122,8 +122,8 @@ function cellHtml(cell: Cell, index: number, md?: MdRender): string {
         }</p>`
       : "";
 
-  return `<article class="cell">
-<header><span class="n">[${index + 1}]</span><div class="prompt">${esc(clip(cell.prompt, 4000))}</div><span class="at">${time(cell.promptAt)}</span></header>
+  return `<article class="cell" id="cell-${index + 1}">
+<header><a class="n" href="#cell-${index + 1}">[${index + 1}]</a><div class="prompt">${esc(clip(cell.prompt, 4000))}</div><span class="at">${time(cell.promptAt)}</span></header>
 ${stats}
 ${parts}
 </article>`;
@@ -169,7 +169,10 @@ body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 ui-sans-ser
 .mono,pre,summary,.provenance,.cellstats,.prompt,.n,.at{font-family:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;font-variant-numeric:lining-nums tabular-nums}
 .doc{max-width:900px;margin:0 auto;padding:0 16px 64px}
 .provenance{display:flex;flex-wrap:wrap;gap:4px 16px;border-bottom:1px solid var(--rule);padding:12px 0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
-.cell{border-bottom:1px solid var(--rule)}
+.cell{border-bottom:1px solid var(--rule);scroll-margin-top:8px}
+.cell:target>header{box-shadow:inset 2px 0 0 var(--brassb)}
+a.n{text-decoration:none}
+a.n:hover{text-decoration:underline}
 .cell>header{display:grid;grid-template-columns:3rem 1fr auto;gap:12px;background:var(--sunk);padding:12px 16px;margin:0 -16px}
 .n{color:var(--brassb);font-size:12px;padding-top:2px}
 .at{color:var(--ink3);font-size:10px;padding-top:3px}
