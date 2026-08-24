@@ -41,9 +41,14 @@ renderer, exporter and skill never know which tool wrote the session.
 |---|---|---|
 | Claude Code | ✅ | `~/.claude/projects/**/*.jsonl` |
 | Codex CLI | ✅ | `~/.codex/sessions/**/rollout-*.jsonl` |
+| DeepSeek Harness (dsh) | ✅ | `~/.dsh/…/session.jsonl[.zstd]` |
 | Gemini CLI | planned | — |
 | opencode | planned | — |
 | aider | planned | `.aider.chat.history.md` |
+
+dsh sessions are zstd-compressed by default; foolscap decompresses them
+with Node's built-in zstd (Node 22.15+ — plain `.jsonl` works on any
+supported Node). `DSH_HOME` is honored, same as dsh itself.
 
 Your harness missing? [Adding one is a single file](#add-a-harness).
 
@@ -57,7 +62,8 @@ npx foolscap
 
 It serves on **127.0.0.1 only** — your sessions are private data and never
 leave your machine — and opens the viewer on your archive. **Zero
-configuration**: if you've used Claude Code or Codex, it's already there.
+configuration**: if you've used Claude Code, Codex or DeepSeek Harness,
+it's already there.
 `foolscap --root <dir>` views a copied or curated archive; `--port` and
 `--no-open` do what they say.
 
@@ -74,8 +80,14 @@ pnpm dev        # http://localhost:5173
 
 - **Sessions as documents** — each prompt opens a numbered cell `[1]`,
   `[2]`, …; the agent's work nests inside it
+- **The prompt shelf** — your prompt library, *derived*: every prompt
+  you've ever sent, across harnesses, deduplicated with reuse counts.
+  Filter, copy, star (stars live in `~/.foolscap`, never near session
+  files), and jump back to the session where you used one
 - **Search the whole archive** — every session, every harness, ranked by
   match count with a snippet; Enter to search, Esc to clear
+- **Cell permalinks & keyboard nav** — `#cell-7` deep-links a cell, in
+  the viewer and in exports; `j`/`k` walk the document notebook-style
 - **Tool calls as ledger rows** — one line each, expandable to full
   inputs, results and errors
 - **Subagent fan-outs as nested documents** — every `Agent` call opens
@@ -180,12 +192,11 @@ If your agent writes a log, foolscap can be its notebook.
 
 ## Roadmap
 
-- **v0.2 — Drive.** Start and steer live sessions via the Claude Agent
-  SDK; parallel agents in worktrees on one dense fleet view; subagent
-  sidechains rendered as nested documents.
-- **v0.3 — The notebook earns its name.** Re-run a cell with an edited
-  prompt, fork a session from any point, session diffing, search across
-  the archive.
+- **v0.3 — Drive.** Start and steer live sessions via the Claude Agent
+  SDK; parallel agents in worktrees on one dense fleet view.
+- **v0.4 — The notebook earns its name.** Re-run a cell with an edited
+  prompt (the shelf becomes a launcher), fork a session from any point,
+  session diffing.
 - **Self-contained app.** Tauri wrapper (Rust core) — one small binary,
   no Node required.
 - More harnesses: Gemini CLI, opencode, aider, and yours.

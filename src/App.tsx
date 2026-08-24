@@ -6,6 +6,7 @@ import {
 } from "./model";
 import { SOURCES, type SourceId } from "./sources";
 import { Notebook } from "./Notebook";
+import { Shelf } from "./Shelf";
 
 type Group = { source: SourceId; dir: string; sessions: SessionRef[] };
 
@@ -103,6 +104,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [view, setView] = useState<"archive" | "shelf">("archive");
 
   const runSearch = () => {
     const q = query.trim();
@@ -174,9 +176,10 @@ export function App() {
                   <li key={h.file}>
                     <button
                       type="button"
-                      onClick={() =>
-                        setSelected({ ref: h, source: h.source })
-                      }
+                      onClick={() => {
+                        setSelected({ ref: h, source: h.source });
+                        setView("archive");
+                      }}
                       className={`block w-full border-b border-rule px-4 py-2.5 text-left transition-colors hover:bg-brass-wash ${
                         selected?.ref.file === h.file ? "bg-brass-wash" : ""
                       }`}
@@ -230,9 +233,10 @@ export function App() {
                     <li key={s.file}>
                       <button
                         type="button"
-                        onClick={() =>
-                          setSelected({ ref: s, source: p.source })
-                        }
+                        onClick={() => {
+                          setSelected({ ref: s, source: p.source });
+                          setView("archive");
+                        }}
                         className={`block w-full border-b border-rule px-4 py-2.5 text-left transition-colors hover:bg-brass-wash ${
                           selected?.ref.file === s.file ? "bg-brass-wash" : ""
                         }`}
@@ -252,25 +256,47 @@ export function App() {
           })}
         </nav>
 
-        <footer className="border-t border-rule px-4 py-2">
+        <footer className="flex items-baseline border-t border-rule px-4 py-2">
           <span className="instrument">read-only · local</span>
+          <button
+            type="button"
+            onClick={() =>
+              setView(view === "shelf" ? "archive" : "shelf")
+            }
+            aria-pressed={view === "shelf"}
+            className={`instrument ml-auto transition-colors hover:text-brass-bright ${
+              view === "shelf" ? "text-brass-bright" : ""
+            }`}
+          >
+            ☆ prompt shelf
+          </button>
         </footer>
       </aside>
 
       {/* ── The document ── */}
       <main className="min-w-0 flex-1 overflow-y-auto">
-        {parsing && <p className="instrument px-8 py-6">parsing…</p>}
-        {!parsing && doc && (
+        {view === "shelf" && (
+          <Shelf
+            onOpen={(ref, source) => {
+              setSelected({ ref, source });
+              setView("archive");
+            }}
+          />
+        )}
+        {view === "archive" && parsing && (
+          <p className="instrument px-8 py-6">parsing…</p>
+        )}
+        {view === "archive" && !parsing && doc && (
           <Notebook
             doc={doc}
             exportName={selected?.ref.id.slice(0, 8) ?? "session"}
             sessionFile={selected?.ref.file}
           />
         )}
-        {!parsing && !doc && loadError && (
+        {view === "archive" && !parsing && !doc && loadError && (
           <p className="px-8 py-6 font-mono text-sm text-oxide">{loadError}</p>
         )}
-        {!parsing && !doc && !loadError && (
+        {view === "archive" && !parsing && !doc && !loadError && (
           <div className="flex h-full items-center justify-center">
             <p className="font-mono text-sm text-ink-3">
               Select a session to read it as a document.

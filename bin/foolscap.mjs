@@ -84,7 +84,7 @@ if (args.includes("--help") || args.includes("-h")) {
   ${bold("foolscap --port")} ${dim("<n>")}      pick a port ${dim("(default 4517)")}
   ${bold("foolscap --no-open")}       don't launch the browser
 
-  ${dim("Reads Claude Code (~/.claude) and Codex CLI (~/.codex).")}
+  ${dim("Reads Claude Code (~/.claude), Codex CLI (~/.codex), DeepSeek dsh (~/.dsh).")}
   ${dim("Read-only · 127.0.0.1 only · github.com/N-45div/foolscap")}
 `);
   process.exit(0);
@@ -163,7 +163,8 @@ async function banner(url) {
   }
 
   const lines = [...bySource.entries()].map(([source, s]) => {
-    const label = (source === "claude" ? "claude code" : source).padEnd(13);
+    const names = { claude: "claude code", codex: "codex", dsh: "deepseek dsh" };
+    const label = (names[source] ?? source).padEnd(13);
     return `  ${label}${String(s.sessions).padStart(4)} sessions ${dim("·")} ${s.projects} project${s.projects === 1 ? "" : "s"}`;
   });
 

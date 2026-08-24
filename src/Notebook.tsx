@@ -43,11 +43,15 @@ function toolSummary(t: ToolInteraction): string {
     case "PowerShell":
     case "shell_command":
     case "shell":
+    case "bash":
       return first("command").split("\n")[0].slice(0, 120);
     case "Read":
     case "Write":
     case "Edit":
-      return first("file_path");
+    case "fs_read":
+    case "fs_write":
+    case "str_replace_editor":
+      return first("file_path", "path");
     case "Glob":
     case "Grep":
       return first("pattern");
@@ -64,9 +68,17 @@ function toolSummary(t: ToolInteraction): string {
   }
 }
 
+/** Claude Code says old_string/new_string; dsh says old_str/new_str. */
+function diffPair(input: Record<string, unknown>): [string, string] {
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  return [
+    s(input.old_string) || s(input.old_str),
+    s(input.new_string) || s(input.new_str),
+  ];
+}
+
 function EditDiff({ input }: { input: Record<string, unknown> }) {
-  const oldS = typeof input.old_string === "string" ? input.old_string : "";
-  const newS = typeof input.new_string === "string" ? input.new_string : "";
+  const [oldS, newS] = diffPair(input);
   if (!oldS && !newS) return null;
   return (
     <div className="mt-2 overflow-x-auto border border-rule font-mono text-xs leading-relaxed">
@@ -95,8 +107,10 @@ function ToolBlock({
 }) {
   const [open, setOpen] = useState(false);
   const summary = toolSummary(tool);
+  const [diffOld, diffNew] = diffPair(tool.input);
+  const isDiff = Boolean(diffOld || diffNew);
   const hasBody =
-    tool.name === "Edit" ||
+    isDiff ||
     tool.name === "Write" ||
     Boolean(tool.result) ||
     Object.keys(tool.input).length > 0;
@@ -106,7 +120,7 @@ function ToolBlock({
       <button
         type="button"
         onClick={() => hasBody && setOpen(!open)}
-        className="grid w-full grid-cols-[6.5rem_1fr_auto] items-baseline gap-3 px-3 py-1.5 text-left hover:bg-brass-wash"
+        className="grid w-full grid-cols-[minmax(6.5rem,max-content)_1fr_auto] items-baseline gap-3 px-3 py-1.5 text-left hover:bg-brass-wash"
         aria-expanded={open}
       >
         <span
@@ -127,13 +141,13 @@ function ToolBlock({
 
       {open && (
         <div className="px-3 pb-3">
-          {tool.name === "Edit" && <EditDiff input={tool.input} />}
+          {isDiff && <EditDiff input={tool.input} />}
           {tool.name === "Write" && typeof tool.input.content === "string" && (
             <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap border border-rule bg-moss-wash px-3 py-2 font-mono text-xs text-moss">
               {tool.input.content.slice(0, 4000)}
             </pre>
           )}
-          {tool.name !== "Edit" && tool.name !== "Write" && (
+          {!isDiff && tool.name !== "Write" && (
             <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap border border-rule bg-paper-sunk px-3 py-2 font-mono text-xs text-ink-2">
               {JSON.stringify(tool.input, null, 2).slice(0, 2000)}
             </pre>

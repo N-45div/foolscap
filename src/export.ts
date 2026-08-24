@@ -50,11 +50,15 @@ function toolSummary(t: ToolInteraction): string {
     case "PowerShell":
     case "shell_command":
     case "shell":
+    case "bash":
       return first("command").split("\n")[0].slice(0, 110);
     case "Read":
     case "Write":
     case "Edit":
-      return first("file_path");
+    case "fs_read":
+    case "fs_write":
+    case "str_replace_editor":
+      return first("file_path", "path");
     case "Glob":
     case "Grep":
       return first("pattern");
@@ -72,12 +76,14 @@ function toolSummary(t: ToolInteraction): string {
 }
 
 function toolHtml(t: ToolInteraction, at?: string): string {
-  const oldS = typeof t.input.old_string === "string" ? t.input.old_string : "";
-  const newS = typeof t.input.new_string === "string" ? t.input.new_string : "";
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  // Claude Code says old_string/new_string; dsh says old_str/new_str.
+  const oldS = str(t.input.old_string) || str(t.input.old_str);
+  const newS = str(t.input.new_string) || str(t.input.new_str);
   const written = typeof t.input.content === "string" ? t.input.content : "";
 
   let body = "";
-  if (t.name === "Edit" && (oldS || newS)) {
+  if (oldS || newS) {
     body +=
       (oldS ? `<pre class="d-old">${esc(clip(oldS, 3000))}</pre>` : "") +
       (newS ? `<pre class="d-new">${esc(clip(newS, 3000))}</pre>` : "");
@@ -196,7 +202,7 @@ a.n:hover{text-decoration:underline}
 .md :first-child{margin-top:0}.md :last-child{margin-bottom:0}
 details.tool{border-bottom:1px solid var(--rule)}
 details.tool:last-child{border-bottom:0}
-details.tool>summary{display:grid;grid-template-columns:6.5rem 1fr auto;gap:12px;align-items:baseline;padding:6px 4px;cursor:pointer;list-style:none;font-size:12px}
+details.tool>summary{display:grid;grid-template-columns:minmax(6.5rem,max-content) 1fr auto;gap:12px;align-items:baseline;padding:6px 4px;cursor:pointer;list-style:none;font-size:12px}
 details.tool>summary::-webkit-details-marker{display:none}
 details.tool>summary:hover{background:var(--brassw)}
 .tname{color:var(--brassb);font-weight:600}
