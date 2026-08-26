@@ -4,7 +4,7 @@
 documents — dense, replayable, shareable.
 
 ![MIT license](https://img.shields.io/badge/license-MIT-b8860b)
-![Works with](https://img.shields.io/badge/works%20with-claude%20code%20·%20codex-1a1a1a)
+![Works with](https://img.shields.io/badge/works%20with-claude%20code%20·%20codex%20·%20dsh-1a1a1a)
 ![PRs welcome](https://img.shields.io/badge/PRs-welcome-2f6349)
 
 ![A Codex session rendered as a foolscap document](docs/screenshot.png)
@@ -117,13 +117,13 @@ attach it to a PR.
 No build step — Node 24 runs the TypeScript directly:
 
 ```sh
-node cli.ts list                          # recent sessions, newest first
-node cli.ts export latest -o session.html # shareable document
-node cli.ts path <id-prefix>              # locate a session's JSONL
+node cli.ts list                           # recent sessions, every harness
+node cli.ts list --source dsh              # claude | codex | dsh
+node cli.ts prompts --filter migration     # the prompt shelf, in the terminal
+node cli.ts prompts --starred              # your curated set
+node cli.ts export latest -o session.html  # shareable document
+node cli.ts path <id-prefix>                # locate a session's file
 ```
-
-(CLI currently covers the Claude Code archive; multi-source is on the
-roadmap.)
 
 ## Agent skill
 
@@ -171,8 +171,8 @@ FOOLSCAP_ROOT=/path/to/archive pnpm dev
 ```
 
 Two layouts are understood: per-source subdirectories (`<root>/claude/…`,
-`<root>/codex/…`) or a bare Claude-style projects directory. When
-`FOOLSCAP_ROOT` is set, **only** that root is scanned.
+`<root>/codex/…`, `<root>/dsh/…`) or a bare Claude-style projects
+directory. When `FOOLSCAP_ROOT` is set, **only** that root is scanned.
 
 ## Add a harness
 
@@ -183,8 +183,10 @@ The ideal first contribution. To support a new agent tool:
    calls with results by id), reasoning to `thinking` parts. Be tolerant:
    never throw on a malformed line.
 2. **Register it** in `src/sources/index.ts` (id + label + parser).
-3. **Add discovery** in `vite.config.ts` — where the files live, how to
-   group them into projects.
+3. **Add discovery** in `server/core.mjs` — a `scanYours(root)` that
+   finds the files and groups them into projects, plus a root in
+   `resolveRoots()`. Prompt extraction for the shelf is a few lines in
+   the same file.
 4. Open a PR with a small **synthetic** fixture file (never real session
    data — transcripts contain private material).
 

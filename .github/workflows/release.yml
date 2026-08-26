@@ -1,0 +1,53 @@
+# Publish to npm on a version tag, using npm Trusted Publishing (OIDC).
+#
+# No token lives in this repo, in CI secrets, or on anyone's laptop:
+# GitHub mints a short-lived identity token for this exact workflow, and
+# npm verifies it against the trusted publisher configured on the package.
+# The published tarball also gets a provenance attestation for free.
+#
+# One-time setup on npmjs.com → package → Settings → Trusted Publisher:
+#   Publisher: GitHub Actions
+#   Organization / repository: N-45div / foolscap
+#   Workflow filename: release.yml
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required: lets GitHub mint the OIDC token for npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      # Trusted publishing needs a recent npm; the bundled one may be older.
+      - run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc -b
+      - run: pnpm build
+
+      # Refuse to publish a tag that disagrees with package.json.
+      - name: Check tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag v$TAG != package.json $PKG"
+            exit 1
+          fi
+          echo "publishing $PKG"
+
+      - run: npm publish

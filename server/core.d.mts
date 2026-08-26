@@ -25,3 +25,20 @@ export declare function scanAll(roots: ArchiveRoots): Promise<
     sessions: Array<{ id: string; file: string; bytes: number; modified: number }>;
   }>
 >;
+
+export declare function readSessionText(file: string): Promise<string>;
+
+export type ShelfPrompt = {
+  key: string;
+  text: string;
+  at?: string;
+  count: number;
+  source: string;
+  dir: string;
+  session: { id: string; file: string; bytes: number; modified: number };
+  starred: boolean;
+};
+
+export declare function collectPrompts(
+  roots: ArchiveRoots,
+): Promise<ShelfPrompt[]>;

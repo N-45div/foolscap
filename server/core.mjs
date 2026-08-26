@@ -26,7 +26,7 @@ export const MAX_SESSION_BYTES = 50 * 1024 * 1024;
 const hasZstd = typeof zlib.zstdDecompressSync === "function";
 
 /** Read a session file as text, decompressing .jsonl.zstd when needed. */
-async function readSessionText(file) {
+export async function readSessionText(file) {
   if (!file.endsWith(".zstd")) return readFile(file, "utf8");
   if (!hasZstd) {
     throw new Error(
@@ -345,7 +345,7 @@ async function toggleStar(key) {
   return stars.has(key);
 }
 
-async function collectPrompts(roots) {
+export async function collectPrompts(roots) {
   const byText = new Map();
   for (const g of await scanAll(roots)) {
     const extract = PROMPT_EXTRACTORS[g.source];

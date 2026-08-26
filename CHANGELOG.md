@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Recurring prompts become skills** — a prompt reused 2+ times gets a
+  "write as skill" action on the shelf that drafts a ready-to-edit
+  `SKILL.md` (frontmatter, the request, provenance). A prompt you keep
+  retyping is a workflow that hasn't been written down yet.
+- **The CLI is multi-source** — `list`, `export` and `path` now cover
+  Claude Code, Codex and dsh (including zstd-compressed sessions), with
+  `--source` to narrow. New `prompts` command puts the shelf in the
+  terminal: `--filter`, `--starred`, reuse counts.
+- **The agent skill knows all three harnesses** — plus prompt recall, so
+  an agent can answer "what do I keep asking for?" and hand back the
+  exact prompt text.
+- **Trusted publishing** — releases publish from GitHub Actions via npm
+  OIDC on a `v*` tag: no token in the repo, in CI secrets, or on a
+  laptop, and the tarball gets a provenance attestation. The workflow
+  refuses to publish when the tag and `package.json` disagree.
+
 ## 0.2.0 — 2026-08-24
 
 The shelf and the third harness.
