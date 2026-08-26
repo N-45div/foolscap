@@ -13,11 +13,25 @@ export type ShelfPrompt = {
   text: string;
   at?: string;
   count: number;
+  /** Occurrences the archive can prove worked / that were taken back. */
+  verified: number;
+  corrected: number;
   source: SourceId;
   dir: string;
   session: SessionRef;
   starred: boolean;
 };
+
+/** What the archive can prove about this prompt, in one sentence. */
+function evidenceLine(p: ShelfPrompt): string {
+  if (p.verified > 0 && p.corrected === 0) {
+    return `Tests passed or a commit landed after ${p.verified} of ${p.count} run(s), and no run was taken back by the next prompt.`;
+  }
+  if (p.corrected > 0) {
+    return `Careful: ${p.corrected} of ${p.count} run(s) were followed by a correction. Tighten the wording before relying on this.`;
+  }
+  return `The archive holds no pass/fail evidence for this one — it was never followed by a test run, a commit, or a correction.`;
+}
 
 /** A reused prompt is a workflow that hasn't been written down yet.
     Draft it as a skill the user can drop into ~/.claude/skills. */
@@ -49,11 +63,46 @@ Written as a skill so you can invoke it instead of retyping it.
 
 ${p.text}
 
+## Evidence
+
+${evidenceLine(p)}
+
 ## Notes
 
 - Derived by foolscap from your ${SOURCES[p.source]?.label ?? p.source} history.
 - Edit before use: add the steps, files and checks that made it work.
 `;
+}
+
+/**
+ * What the archive can prove about a prompt. Deliberately quiet: no
+ * badge at all when there is no evidence either way, because an
+ * invented verdict is worse than none.
+ */
+function Evidence({ p }: { p: ShelfPrompt }) {
+  if (p.verified > 0 && p.corrected === 0) {
+    const label =
+      p.count > 1 ? `worked ${p.verified}/${p.count}` : "worked";
+    return (
+      <span
+        className="text-moss"
+        title="Tests passed or a commit landed after this prompt — open the session to check"
+      >
+        ✓ {label}
+      </span>
+    );
+  }
+  if (p.corrected > 0) {
+    return (
+      <span
+        className="text-oxide"
+        title="The next thing you typed took the work back"
+      >
+        ↺ corrected
+      </span>
+    );
+  }
+  return null;
 }
 
 function fmtDay(iso?: string): string {
@@ -215,6 +264,7 @@ export function Shelf({
                 {p.count > 1 && (
                   <span className="text-brass-bright">{p.count}× used</span>
                 )}
+                <Evidence p={p} />
                 {p.count > 1 && (
                   <button
                     type="button"

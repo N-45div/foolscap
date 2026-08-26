@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Outcome evidence — which prompts actually worked.** Every occurrence
+  of a prompt is judged against what the log records happened next:
+  tests or a build that passed, a commit that landed, or a next prompt
+  that took the work back ("no, that's wrong"). Read deterministically
+  from the archive — no model call, no API key, no review queue. The
+  shelf shows `✓ worked 2/3` or `↺ corrected`, proven prompts sort
+  first, `foolscap prompts --worked` filters to them, and generated
+  skills cite their evidence. Deliberately conservative: a claim in
+  prose is not evidence, and a suite that printed failures is never a
+  pass. 14 tests pin both directions, including the false positives
+  ("revertible migrations…" is not a correction).
 - **Recurring prompts become skills** — a prompt reused 2+ times gets a
   "write as skill" action on the shelf that drafts a ready-to-edit
   `SKILL.md` (frontmatter, the request, provenance). A prompt you keep

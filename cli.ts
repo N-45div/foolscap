@@ -3,7 +3,7 @@
  * foolscap CLI — the agent-facing surface.
  *
  *   node cli.ts list [--project <substr>] [--source <claude|codex|dsh>]
- *   node cli.ts prompts [--filter <substr>] [--starred] [-n <count>]
+ *   node cli.ts prompts [--filter <substr>] [--starred] [--worked] [-n <count>]
  *   node cli.ts export <id-prefix|latest> [-o out.html] [--project <substr>]
  *   node cli.ts path <id-prefix|latest>
  *
@@ -99,6 +99,10 @@ if (cmd === "list") {
   const limit = Number(arg("-n") ?? 40);
   let prompts = await collectPrompts(roots);
   if (has("--starred")) prompts = prompts.filter((p) => p.starred);
+  // --worked: only prompts the archive can prove landed (tests passed or
+  // a commit) and that were never taken back by the next prompt.
+  if (has("--worked"))
+    prompts = prompts.filter((p) => p.verified > 0 && p.corrected === 0);
   if (filter) prompts = prompts.filter((p) => p.text.toLowerCase().includes(filter));
   if (prompts.length === 0) {
     console.log("no prompts matched");
@@ -106,13 +110,22 @@ if (cmd === "list") {
   }
   for (const p of prompts.slice(0, limit)) {
     const mark = p.starred ? "*" : " ";
+    let evidence = "     ";
+    if (p.verified > 0 && p.corrected === 0) evidence = "worked";
+    else if (p.corrected > 0) evidence = "undone";
     const uses = p.count > 1 ? `${p.count}x` : "  ";
     const day = p.at ? p.at.slice(0, 10) : "          ";
     const src = (SOURCES[p.source as SourceId]?.label ?? p.source).padEnd(12);
     const text = p.text.replace(/\s+/g, " ").slice(0, 96);
-    console.log(`${mark} ${day}  ${uses.padStart(4)}  ${src}  ${text}`);
+    console.log(
+      `${mark} ${day}  ${uses.padStart(4)}  ${evidence.padEnd(6)}  ${src}  ${text}`,
+    );
   }
-  console.log(`\n${prompts.length} prompt(s); * = starred, Nx = times reused.`);
+  console.log(
+    `\n${prompts.length} prompt(s) · * starred · Nx reused · ` +
+      `worked = tests passed or a commit landed after it · ` +
+      `undone = the next prompt took it back`,
+  );
 } else if (cmd === "export" || cmd === "path") {
   const ref = process.argv[3];
   if (!ref) {
@@ -146,7 +159,9 @@ if (cmd === "list") {
 } else {
   console.log("foolscap — the notebook for coding agents");
   console.log("  node cli.ts list [--project <substr>] [--source claude|codex|dsh]");
-  console.log("  node cli.ts prompts [--filter <substr>] [--starred] [-n 40]");
+  console.log(
+    "  node cli.ts prompts [--filter <substr>] [--starred] [--worked] [-n 40]",
+  );
   console.log("  node cli.ts export <id-prefix|latest> [-o out.html]");
   console.log("  node cli.ts path <id-prefix|latest>");
 }

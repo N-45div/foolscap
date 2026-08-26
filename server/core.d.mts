@@ -33,6 +33,8 @@ export type ShelfPrompt = {
   text: string;
   at?: string;
   count: number;
+  verified: number;
+  corrected: number;
   source: string;
   dir: string;
   session: { id: string; file: string; bytes: number; modified: number };

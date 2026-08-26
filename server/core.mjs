@@ -14,6 +14,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import * as zlib from "node:zlib";
+import { judge, segmentsFor } from "./outcome.mjs";
+
+/** Archives copied between machines carry both line endings. */
+const LINE_BREAK = /\r?\n/;
 
 // Viewer parses in the browser; a 200MB rollout would hang the tab.
 export const MAX_SESSION_BYTES = 50 * 1024 * 1024;
@@ -227,99 +231,11 @@ export async function scanAll(roots) {
   ];
 }
 
-// ── The prompt shelf ──────────────────────────────────────────────────
-// Every prompt ever sent, derived from the archive itself. Extraction is
-// per-source but deliberately shallow: we only need the user's text, not
-// a full parse. Dedupe by exact trimmed text; count reuses.
-
-function claudePrompts(lines, push) {
-  for (const line of lines) {
-    let e;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (e?.type !== "user" || e.isSidechain || !e.message) continue;
-    const c = e.message.content;
-    const text =
-      typeof c === "string"
-        ? c
-        : Array.isArray(c)
-          ? c
-              .filter((b) => b?.type === "text" && typeof b.text === "string")
-              .map((b) => b.text)
-              .join("\n")
-          : "";
-    const t = text.trim();
-    if (!t || t.startsWith("<") || t.startsWith("[Request interrupted"))
-      continue;
-    if (t.startsWith("[SYSTEM")) continue;
-    push(t, e.timestamp);
-  }
-}
-
-const IDE_PROMPT_MARKER = "## My request for Codex:";
-
-function codexPrompts(lines, push) {
-  for (const line of lines) {
-    let e;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const p = e?.payload;
-    if (e?.type !== "response_item" || p?.type !== "message") continue;
-    if (p.role !== "user" || !Array.isArray(p.content)) continue;
-    let t = p.content
-      .map((b) => b?.text ?? "")
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-    if (t.startsWith("# Context from my IDE setup")) {
-      const i = t.indexOf(IDE_PROMPT_MARKER);
-      t = i === -1 ? "" : t.slice(i + IDE_PROMPT_MARKER.length).trim();
-    }
-    if (!t || t.startsWith("<")) continue;
-    push(t, e.timestamp);
-  }
-}
-
-function dshPrompts(lines, push) {
-  for (const line of lines) {
-    let e;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (e?.type !== "user/message") continue;
-    const m = e.data?.message;
-    const text =
-      typeof m === "string"
-        ? m
-        : typeof m?.text === "string"
-          ? m.text
-          : typeof m?.content === "string"
-            ? m.content
-            : Array.isArray(m?.content)
-              ? m.content
-                  .map((b) => (typeof b === "string" ? b : (b?.text ?? "")))
-                  .filter(Boolean)
-                  .join("\n")
-              : "";
-    const t = text.trim();
-    if (!t || t.startsWith("<")) continue;
-    push(t, typeof e.time === "number" ? new Date(e.time).toISOString() : undefined);
-  }
-}
-
-const PROMPT_EXTRACTORS = {
-  claude: claudePrompts,
-  codex: codexPrompts,
-  dsh: dshPrompts,
-};
+// ── The prompt shelf ───────────────────────────────────────
+// Every prompt ever sent, derived from the archive itself, deduplicated
+// by exact text. Each occurrence carries the evidence of how it turned
+// out (see server/outcome.mjs) so the shelf can rank by what actually
+// worked rather than by what was typed most recently.
 
 const promptKey = (text) =>
   createHash("sha1").update(text.trim()).digest("hex");
@@ -347,51 +263,64 @@ async function toggleStar(key) {
 
 export async function collectPrompts(roots) {
   const byText = new Map();
+
   for (const g of await scanAll(roots)) {
-    const extract = PROMPT_EXTRACTORS[g.source];
-    if (!extract) continue;
     for (const s of g.sessions) {
       if (s.bytes > MAX_SESSION_BYTES) continue;
       let lines;
       try {
-        lines = (await readSessionText(s.file)).split("\n");
+        lines = (await readSessionText(s.file)).split(LINE_BREAK);
       } catch {
         continue;
       }
-      extract(lines, (text, at) => {
-        const t = text.slice(0, 4000);
-        const key = promptKey(t);
-        const prev = byText.get(key);
-        if (prev) {
-          prev.count++;
-          if (at && (!prev.at || at > prev.at)) {
-            prev.at = at;
-            prev.source = g.source;
-            prev.dir = g.dir;
-            prev.session = s;
-          }
-        } else {
-          byText.set(key, {
+
+      for (const segment of segmentsFor(g.source, lines)) {
+        const text = segment.text.slice(0, 4000);
+        const key = promptKey(text);
+        const verdict = judge(segment).verdict;
+
+        let p = byText.get(key);
+        if (!p) {
+          p = {
             key,
-            text: t,
-            at,
-            count: 1,
+            text,
+            at: segment.at,
+            count: 0,
+            verified: 0,
+            corrected: 0,
             source: g.source,
             dir: g.dir,
             session: s,
-          });
+          };
+          byText.set(key, p);
         }
-      });
+        p.count++;
+        if (verdict === "verified") p.verified++;
+        if (verdict === "corrected") p.corrected++;
+        // Keep the most recent occurrence as the one we link to.
+        if (segment.at && (!p.at || segment.at > p.at)) {
+          p.at = segment.at;
+          p.source = g.source;
+          p.dir = g.dir;
+          p.session = s;
+        }
+      }
     }
   }
+
   const stars = await readStars();
   const all = [...byText.values()].map((p) => ({
     ...p,
     starred: stars.has(p.key),
   }));
+
+  // Default order: starred, then proven, then recent. "Proven" means the
+  // archive holds evidence it worked and none that it was taken back.
   all.sort(
     (a, b) =>
       Number(b.starred) - Number(a.starred) ||
+      Number(b.verified > 0 && b.corrected === 0) -
+        Number(a.verified > 0 && a.corrected === 0) ||
       (b.at ?? "").localeCompare(a.at ?? ""),
   );
   return all.slice(0, 1000);
