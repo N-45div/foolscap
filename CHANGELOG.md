@@ -4,6 +4,22 @@
 
 ### Added
 
+- **`foolscap acp` — ACP over the network.** The Agent Client Protocol
+  standardizes the client↔harness boundary, but every client today
+  spawns its agent as a local subprocess: the remote transport is still
+  unspecified, so an agent can only be driven from the machine it runs
+  on. `foolscap acp` serves any stdio ACP agent (Claude Code, Codex,
+  Gemini CLI) over an authenticated WebSocket, so you can hand the
+  endpoint to a client anywhere. Frames are relayed verbatim rather than
+  interpreted, so future protocol revisions pass through untouched, and
+  every frame is recorded into the archive. Verified against the real
+  `@zed-industries/claude-code-acp`.
+
+  Security: a bearer token is required and generated per run (there is
+  no open mode), loopback is the default and `--expose` warns loudly,
+  one agent process per connection dies with its socket, non-JSON agent
+  output never reaches the wire, and the token is never written to a
+  recording.
 - **Outcome evidence — which prompts actually worked.** Every occurrence
   of a prompt is judged against what the log records happened next:
   tests or a build that passed, a commit that landed, or a next prompt

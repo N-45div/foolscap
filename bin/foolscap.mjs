@@ -74,15 +74,85 @@ if (args[0] === "skill") {
   process.exit(0);
 }
 
-if (args.includes("--help") || args.includes("-h")) {
+// ── foolscap acp — expose a local agent over the network ──────────────
+if (args[0] === "acp") {
+  const { startAcpBridge, newToken, AGENTS, acpArchiveDir } = await import(
+    "../server/acp.mjs"
+  );
+  const agent = flag("--agent") ?? "claude";
+  const port = Number(flag("--port") ?? 4518);
+  const cwd = resolve(flag("--cwd") ?? process.cwd());
+  const token = flag("--token") ?? newToken();
+  const open = args.includes("--expose");
+  const host = open ? "0.0.0.0" : "127.0.0.1";
+  const record = !args.includes("--no-record");
+
+  let bridge;
+  try {
+    bridge = await startAcpBridge({
+      agent,
+      port,
+      host,
+      token,
+      cwd,
+      record,
+      log: (m) => say(`  ${dim(m)}`),
+    });
+  } catch (err) {
+    console.error(`${oxide("foolscap acp:")} ${err.message}`);
+    process.exit(1);
+  }
+
+  const label = AGENTS[agent]?.label ?? agent;
+  const hostLabel = open ? "<this-host>" : "127.0.0.1";
+  const url = `ws://${hostLabel}:${bridge.port}/?token=${token}`;
+  const recordLine = record
+    ? dim(`recording  ${acpArchiveDir()}`)
+    : dim("recording  off");
+  const exposeWarning = open
+    ? `\n  ${oxide("--expose is on: this port is reachable from your network.")}\n` +
+      `  ${oxide("Put it behind a tunnel or firewall; do not leave it open.")}\n`
+    : "";
+
+  say(`
+  ${wordmark} ${dim("· acp bridge")}
+
+  ${dim("agent")}     ${bold(label)}
+  ${dim("cwd")}       ${cwd}
+  ${dim("endpoint")}  ${brass(url)}
+  ${recordLine}
+
+  ${dim("Hand that endpoint to any ACP client. The token is required —")}
+  ${dim("anyone holding it can run code in the directory above.")}
+${exposeWarning}`);
+
+  const stop = async () => {
+    await bridge.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+
+  // The bridge is the whole job for this subcommand. Holding the module
+  // here keeps the process alive and stops the viewer below from
+  // starting on top of it.
+  await new Promise(() => {});
+} else if (args.includes("--help") || args.includes("-h")) {
   say(`
   ${wordmark} ${dim("· the notebook for coding agents")}
 
   ${bold("foolscap")}                 open the viewer on your archive
   ${bold("foolscap skill")}           install the Claude Code skill
+  ${bold("foolscap acp")}             serve a local agent over ACP ${dim("(see below)")}
   ${bold("foolscap --root")} ${dim("<dir>")}    view a curated or copied archive
   ${bold("foolscap --port")} ${dim("<n>")}      pick a port ${dim("(default 4517)")}
   ${bold("foolscap --no-open")}       don't launch the browser
+
+  ${bold("foolscap acp")} ${dim("--agent claude|codex|gemini")}   which harness to run
+  ${dim("             --cwd <dir>       where it works (default: here)")}
+  ${dim("             --port <n>        default 4518")}
+  ${dim("             --expose          bind beyond loopback (dangerous)")}
+  ${dim("             --no-record       don't archive the session")}
 
   ${dim("Reads Claude Code (~/.claude), Codex CLI (~/.codex), DeepSeek dsh (~/.dsh).")}
   ${dim("Read-only · 127.0.0.1 only · github.com/N-45div/foolscap")}
