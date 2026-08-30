@@ -233,7 +233,12 @@ async function banner(url) {
   }
 
   const lines = [...bySource.entries()].map(([source, s]) => {
-    const names = { claude: "claude code", codex: "codex", dsh: "deepseek dsh" };
+    const names = {
+      claude: "claude code",
+      codex: "codex",
+      dsh: "deepseek dsh",
+      acp: "fleet",
+    };
     const label = (names[source] ?? source).padEnd(13);
     return `  ${label}${String(s.sessions).padStart(4)} sessions ${dim("·")} ${s.projects} project${s.projects === 1 ? "" : "s"}`;
   });

@@ -15,6 +15,8 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import * as zlib from "node:zlib";
 import { judge, segmentsFor } from "./outcome.mjs";
+import { handleFleetApi } from "./fleet-api.mjs";
+import { acpArchiveDir } from "./acp.mjs";
 
 /** Archives copied between machines carry both line endings. */
 const LINE_BREAK = /\r?\n/;
@@ -54,10 +56,12 @@ export function resolveRoots(fixtureRoot) {
     const c = join(fixtureRoot, "claude");
     const x = join(fixtureRoot, "codex");
     const d = join(fixtureRoot, "dsh");
+    const a = join(fixtureRoot, "acp");
     return {
       claudeRoot: existsSync(c) ? c : fixtureRoot,
       codexRoot: existsSync(x) ? x : null,
       dshRoot: existsSync(d) ? d : null,
+      acpRoot: existsSync(a) ? a : null,
     };
   }
   return {
@@ -65,7 +69,54 @@ export function resolveRoots(fixtureRoot) {
     codexRoot: join(homedir(), ".codex", "sessions"),
     // dsh honors DSH_HOME the same way dsh itself does.
     dshRoot: process.env.DSH_HOME || join(homedir(), ".dsh"),
+    // Sessions foolscap itself ran, through the fleet or the bridge.
+    acpRoot: acpArchiveDir(),
   };
+}
+
+/** Fleet/bridge recordings: ~/.foolscap/acp/<id>.jsonl, header line
+    carries cwd, name and agent. */
+async function scanAcp(root) {
+  const byCwd = new Map();
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const e of entries) {
+    if (!e.isFile() || !e.name.endsWith(".jsonl")) continue;
+    const full = join(root, e.name);
+    const s = await stat(full);
+    if (s.size === 0) continue;
+
+    let cwd = "(unknown project)";
+    try {
+      const fh = await open(full, "r");
+      const buf = Buffer.alloc(4096);
+      const { bytesRead } = await fh.read(buf, 0, 4096, 0);
+      await fh.close();
+      const head = buf.toString("utf8", 0, bytesRead);
+      const raw = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(head)?.[1];
+      if (raw) cwd = JSON.parse(`"${raw}"`);
+    } catch {
+      // unreadable header — keep the unknown-project bucket
+    }
+
+    const key = cwd.toLowerCase();
+    const group = byCwd.get(key) ?? { display: cwd, sessions: [] };
+    group.sessions.push({
+      id: e.name.replace(/\.jsonl$/, ""),
+      file: full,
+      bytes: s.size,
+      modified: s.mtimeMs,
+    });
+    byCwd.set(key, group);
+  }
+  return [...byCwd.values()].map(({ display, sessions }) => {
+    sessions.sort((a, b) => b.modified - a.modified);
+    return { source: "acp", dir: display, sessions };
+  });
 }
 
 /** Claude Code: ~/.claude/projects/<dir>/<uuid>.jsonl */
@@ -228,6 +279,7 @@ export async function scanAll(roots) {
     ...(await scanClaude(roots.claudeRoot)),
     ...(roots.codexRoot ? await scanCodex(roots.codexRoot) : []),
     ...(roots.dshRoot ? await scanDsh(roots.dshRoot) : []),
+    ...(roots.acpRoot ? await scanAcp(roots.acpRoot) : []),
   ];
 }
 
@@ -347,9 +399,16 @@ export async function handleApi(req, res, roots) {
     (file.endsWith(".jsonl") || file.endsWith(".jsonl.zstd")) &&
     (file.startsWith(roots.claudeRoot) ||
       (roots.codexRoot !== null && file.startsWith(roots.codexRoot)) ||
-      (roots.dshRoot != null && file.startsWith(roots.dshRoot)));
+      (roots.dshRoot != null && file.startsWith(roots.dshRoot)) ||
+      (roots.acpRoot != null && file.startsWith(roots.acpRoot)));
 
   try {
+    // The fleet has its own surface (live stream + verbs that run code).
+    // Its recordings land in the archive being viewed, so what you see
+    // is where new sessions go.
+    const fleetOpts = { recordDir: roots.acpRoot ?? undefined };
+    if (await handleFleetApi(req, res, url, fleetOpts)) return true;
+
     if (url.pathname === "/api/projects") {
       send(res, 200, "application/json", JSON.stringify(await scanAll(roots)));
       return true;

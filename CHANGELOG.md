@@ -4,6 +4,23 @@
 
 ### Added
 
+- **The fleet — many agents, one queue.** foolscap is now the ACP
+  client for each agent it runs: it sends prompts, receives the stream
+  and answers permission requests, so it knows live which agent is
+  blocked on you, whose tests just went red, which turn finished and
+  is waiting, and which is fine. The queue is ranked by that (blocked →
+  red → review → working → idle, longest-waiting first); `n` jumps to
+  the next thing that needs you, `a`/`d` answer a permission, and the
+  tab title carries the count. Each agent opens as a document with the
+  archive's renderer — same document, present tense — and every session
+  is recorded, so it's in the archive the moment it ends. Works with
+  any stdio ACP agent (Claude Code, Codex, Gemini CLI, or a command you
+  name). The fleet API is loopback-only, refuses cross-origin requests,
+  and requires a header simple cross-origin requests cannot carry.
+- **One adapter for every ACP harness.** Sessions run through the fleet
+  or the bridge are recorded as the protocol itself and replayed by the
+  same TranscriptBuilder that drew them live, so a new harness needs no
+  adapter. They show up in the archive, the shelf, and outcome evidence.
 - **`foolscap acp` — ACP over the network.** The Agent Client Protocol
   standardizes the client↔harness boundary, but every client today
   spawns its agent as a local subprocess: the remote transport is still

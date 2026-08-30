@@ -59,6 +59,17 @@ function toolSummary(t: ToolInteraction): string {
     case "fs_write":
     case "str_replace_editor":
       return first("file_path", "path");
+    case "execute":
+    case "edit":
+    case "read":
+    case "delete":
+    case "move":
+    case "search":
+    case "fetch":
+    case "think":
+    case "other":
+    case "tool":
+      return first("title", "file_path", "command");
     case "Glob":
     case "Grep":
       return first("pattern");

@@ -6,6 +6,7 @@ export type ArchiveRoots = {
   claudeRoot: string;
   codexRoot: string | null;
   dshRoot: string | null;
+  acpRoot: string | null;
 };
 
 export declare function resolveRoots(

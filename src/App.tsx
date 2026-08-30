@@ -7,6 +7,7 @@ import {
 import { SOURCES, type SourceId } from "./sources";
 import { Notebook } from "./Notebook";
 import { Shelf } from "./Shelf";
+import { Fleet } from "./Fleet";
 
 type Group = { source: SourceId; dir: string; sessions: SessionRef[] };
 
@@ -104,7 +105,16 @@ export function App() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
-  const [view, setView] = useState<"archive" | "shelf">("archive");
+  const [view, setView] = useState<"archive" | "shelf" | "fleet">("archive");
+
+  // Coming back to the archive picks up sessions the fleet recorded
+  // since the page loaded — a finished agent is in the archive at once.
+  useEffect(() => {
+    if (view !== "archive") return;
+    fetchProjects()
+      .then(setProjects)
+      .catch(() => {});
+  }, [view]);
 
   const runSearch = () => {
     const q = query.trim();
@@ -256,25 +266,35 @@ export function App() {
           })}
         </nav>
 
-        <footer className="flex items-baseline border-t border-rule px-4 py-2">
-          <span className="instrument">read-only · local</span>
-          <button
-            type="button"
-            onClick={() =>
-              setView(view === "shelf" ? "archive" : "shelf")
-            }
-            aria-pressed={view === "shelf"}
-            className={`instrument ml-auto transition-colors hover:text-brass-bright ${
-              view === "shelf" ? "text-brass-bright" : ""
-            }`}
-          >
-            ☆ prompt shelf
-          </button>
+        <footer className="flex items-baseline gap-3 border-t border-rule px-4 py-2">
+          <span className="instrument">local</span>
+          <nav className="ml-auto flex gap-3" aria-label="View">
+            {(
+              [
+                ["archive", "archive"],
+                ["shelf", "☆ shelf"],
+                ["fleet", "⚡ fleet"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setView(id)}
+                aria-pressed={view === id}
+                className={`instrument transition-colors hover:text-brass-bright ${
+                  view === id ? "text-brass-bright" : ""
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
         </footer>
       </aside>
 
       {/* ── The document ── */}
       <main className="min-w-0 flex-1 overflow-y-auto">
+        {view === "fleet" && <Fleet />}
         {view === "shelf" && (
           <Shelf
             onOpen={(ref, source) => {

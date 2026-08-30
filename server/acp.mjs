@@ -55,6 +55,33 @@ export const AGENTS = {
   },
 };
 
+/**
+ * Resolve an agent key, or a raw command line, into a launch spec.
+ * A raw command is labelled by its script or binary name, so
+ * "node tests/fake-acp-agent.mjs" reads as "fake-acp-agent".
+ */
+export function resolveAgent(agent) {
+  if (AGENTS[agent]) {
+    // FOOLSCAP_ACP_CLAUDE="…" swaps the launch command for a known
+    // agent — a custom install, a wrapper, a pinned version — while it
+    // keeps its name everywhere it's shown.
+    const override = process.env[`FOOLSCAP_ACP_${agent.toUpperCase()}`];
+    if (override) {
+      const parts = override.trim().split(/\s+/);
+      return { label: AGENTS[agent].label, command: parts[0], args: parts.slice(1) };
+    }
+    return AGENTS[agent];
+  }
+  const parts = String(agent).trim().split(/\s+/);
+  const named = parts.length > 1 ? parts.at(-1) : parts[0];
+  const label =
+    named
+      .split(/[\\/]/)
+      .pop()
+      .replace(/\.[a-z]+$/i, "") || String(agent);
+  return { label, command: parts[0], args: parts.slice(1) };
+}
+
 export const newToken = () => randomBytes(24).toString("base64url");
 
 /** Constant-time compare that tolerates length mismatch. */
@@ -74,7 +101,7 @@ function tokenMatches(given, expected) {
  * Windows we build one command string and quote every argument
  * ourselves; everywhere else we spawn directly with no shell at all.
  */
-function spawnAgent(spec, cwd) {
+export function spawnAgent(spec, cwd) {
   const stdio = ["pipe", "pipe", "pipe"];
   if (process.platform !== "win32") {
     return spawn(spec.command, spec.args, { cwd, stdio });
@@ -89,7 +116,7 @@ function spawnAgent(spec, cwd) {
  * append-only and never blocks the relay: a failed write loses the
  * recording, never the session.
  */
-class Recorder {
+export class Recorder {
   constructor(file, header) {
     this.file = file;
     this.queue = appendFile(file, JSON.stringify(header) + "\n").catch(
@@ -134,11 +161,7 @@ export async function startAcpBridge(opts) {
 
   if (!token) throw new Error("a token is required — refusing to start open");
 
-  const spec = AGENTS[agent] ?? {
-    label: agent,
-    command: agent.split(" ")[0],
-    args: agent.split(" ").slice(1),
-  };
+  const spec = resolveAgent(agent);
 
   if (record) await mkdir(recordDir, { recursive: true });
 

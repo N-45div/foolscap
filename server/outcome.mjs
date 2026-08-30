@@ -18,6 +18,8 @@
  * by opening the cell.
  */
 
+import { TranscriptBuilder } from "./acp-doc.mjs";
+
 // ── Evidence patterns ────────────────────────────────────────────────
 
 const TEST_CMD =
@@ -68,13 +70,29 @@ const isCorrection = (text) =>
 const any = (patterns, text) => patterns.some((re) => re.test(text));
 
 /** Shell-ish tool inputs put the command in different shapes. */
-function commandOf(tool) {
+export function commandOf(tool) {
   const i = tool.input ?? {};
   const c = i.command ?? i.cmd ?? i.script;
   if (typeof c === "string") return c;
   // Codex sends argv arrays: ["bash", "-lc", "pnpm test"]
   if (Array.isArray(c)) return c.filter((p) => typeof p === "string").join(" ");
+  // ACP tool calls carry the command as their title.
+  if (tool.name === "execute" && typeof i.title === "string") return i.title;
   return "";
+}
+
+/**
+ * Read one command's output as evidence. Shared by the archive judge
+ * (past tense) and the fleet (present tense) so both agree on what a
+ * green or red run looks like.
+ */
+export function classifyRun(cmd, output, isError = false) {
+  const testish = TEST_CMD.test(cmd) || BUILD_CMD.test(cmd);
+  if (!testish) return { tested: false, passed: false, failed: false };
+  const text = output ?? "";
+  if (any(FAIL_SIGNAL, text)) return { tested: true, passed: false, failed: true };
+  if (any(PASS_SIGNAL, text) && !isError) return { tested: true, passed: true, failed: false };
+  return { tested: true, passed: false, failed: false };
 }
 
 /**
@@ -95,13 +113,12 @@ export function judge(segment) {
     const cmd = commandOf(tool);
     const result = tool.result ?? "";
 
-    if (TEST_CMD.test(cmd) || BUILD_CMD.test(cmd)) {
-      tested = true;
-      // A run that prints failures is a failure even when it also prints
-      // a passing count for other files.
-      if (any(FAIL_SIGNAL, result)) failed = true;
-      else if (any(PASS_SIGNAL, result) && !tool.isError) passed = true;
-    }
+    // A run that prints failures is a failure even when it also prints
+    // a passing count for other files — classifyRun checks red first.
+    const run = classifyRun(cmd, result, tool.isError);
+    if (run.tested) tested = true;
+    if (run.failed) failed = true;
+    if (run.passed) passed = true;
 
     if (COMMIT_CMD.test(cmd) && !tool.isError && any(COMMIT_OK, result)) {
       committed = true;
@@ -280,10 +297,36 @@ function dshSegments(lines, seg) {
   }
 }
 
+/** Fleet/bridge recordings: replay the protocol into cells, then read
+    those cells as segments. One path for every ACP harness. */
+function acpSegments(lines, seg) {
+  const builder = new TranscriptBuilder();
+  for (const line of lines) {
+    let f;
+    try {
+      f = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (f?.dir !== "c2a" && f?.dir !== "a2c") continue;
+    builder.feed(f.dir, f.msg, f.t);
+  }
+  for (const cell of builder.cells) {
+    if (cell.prompt === "(session resumed)") continue;
+    seg.prompt(cell.prompt, cell.promptAt);
+    for (const part of cell.parts) {
+      if (part.kind !== "tool") continue;
+      seg.tool(part.tool.id, part.tool.name, part.tool.input);
+      seg.result(part.tool.id, part.tool.result, part.tool.isError);
+    }
+  }
+}
+
 const SEGMENTERS = {
   claude: claudeSegments,
   codex: codexSegments,
   dsh: dshSegments,
+  acp: acpSegments,
 };
 
 /** Split one session's lines into prompt segments. Unknown source → []. */

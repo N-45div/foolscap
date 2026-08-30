@@ -123,13 +123,23 @@ test("relays a full initialize → new → prompt exchange", async () => {
     method: "session/prompt",
     params: { sessionId, prompt: [{ type: "text", text: "make it work" }] },
   });
-  // two session/update notifications, then the result
-  await got(5);
+  // streamed session/update notifications, then the result for id 2
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("no prompt result")), 8000);
+    const check = () => {
+      if (frames.some((f) => f.id === 2)) {
+        clearTimeout(timer);
+        resolve();
+      }
+    };
+    ws.addEventListener("message", check);
+    check();
+  });
 
   const updates = frames.filter((f) => f.method === "session/update");
-  assert.equal(updates.length, 2);
-  assert.equal(updates[0].params.update.type, "agent_message_chunk");
-  assert.equal(updates[1].params.update.type, "tool_call");
+  assert.ok(updates.length >= 2);
+  assert.equal(updates[0].params.update.sessionUpdate, "agent_message_chunk");
+  assert.equal(updates[1].params.update.sessionUpdate, "tool_call");
 
   const result = frames.find((f) => f.id === 2);
   assert.equal(result.result.stopReason, "end_turn");

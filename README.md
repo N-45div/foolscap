@@ -42,6 +42,7 @@ renderer, exporter and skill never know which tool wrote the session.
 | Claude Code | ✅ | `~/.claude/projects/**/*.jsonl` |
 | Codex CLI | ✅ | `~/.codex/sessions/**/rollout-*.jsonl` |
 | DeepSeek Harness (dsh) | ✅ | `~/.dsh/…/session.jsonl[.zstd]` |
+| **Any ACP agent**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | Gemini CLI | planned | — |
 | opencode | planned | — |
 | aider | planned | `.aider.chat.history.md` |
@@ -75,6 +76,55 @@ cd foolscap
 pnpm install
 pnpm dev        # http://localhost:5173
 ```
+
+## The fleet — many agents, one queue
+
+Running five agents at once fails for one reason: every surface shows
+you five terminals, so you poll all of them and the bookkeeping costs
+more than the work. The fleet inverts it. foolscap is the [ACP](https://agentclientprotocol.com)
+client for each agent — it sends the prompts, receives the stream,
+answers permission requests — so it knows, exactly and live, which agent
+is **blocked on you**, which one's **tests just went red**, which is
+**done and waiting**, and which is fine and should be left alone. That's
+shown as a queue, not a grid:
+
+```
+needs you   ⚠ auth-refactor     waiting for permission        12s
+            ✗ payment-webhook   tests failing (2)             4m
+review      ● docs-sweep        tests passed · edited 3 files  1m
+working     ◌ queue-backoff     pnpm test                     —
+```
+
+- **`n`** jumps to whatever needs you next; **`a`** / **`d`** answer a
+  permission request. Inbox zero, for agents.
+- The tab title carries the count — `(2) foolscap — needs you` — so you
+  can be in another window.
+- Each agent opens as a document: the same renderer as the archive,
+  because it is the same document. Every session is recorded, so it's
+  in your archive the moment it ends, with the same outcome evidence.
+- Works with any agent that speaks ACP over stdio: Claude Code, Codex,
+  Gemini CLI, or a command you name.
+
+Open **⚡ fleet** in the sidebar. Launching an agent runs code on your
+machine, so the fleet API is loopback-only and refuses cross-origin
+requests outright.
+
+### `foolscap acp` — an agent over the network
+
+ACP standardizes the client↔harness boundary, but every client today
+spawns its agent as a local subprocess. `foolscap acp` serves any stdio
+ACP agent over an authenticated WebSocket, so you can hand the endpoint
+to a client anywhere — and the session is recorded here.
+
+```sh
+foolscap acp --agent claude --cwd ~/myproject
+# → ws://127.0.0.1:4518/?token=<generated>
+```
+
+A token is required and generated per run (there is no open mode);
+loopback is the default and `--expose` warns loudly. To launch a known
+agent through a custom install or wrapper, set
+`FOOLSCAP_ACP_CLAUDE="…"` (or `_CODEX`, `_GEMINI`) to the command.
 
 ## Features
 
@@ -194,11 +244,11 @@ If your agent writes a log, foolscap can be its notebook.
 
 ## Roadmap
 
-- **v0.3 — Drive.** Start and steer live sessions via the Claude Agent
-  SDK; parallel agents in worktrees on one dense fleet view.
+- **v0.3 — the fleet** (shipping now): steer many agents from one
+  queue; remote agents via `foolscap acp`; outcome evidence live.
 - **v0.4 — The notebook earns its name.** Re-run a cell with an edited
   prompt (the shelf becomes a launcher), fork a session from any point,
-  session diffing.
+  session diffing, fleets across machines.
 - **Self-contained app.** Tauri wrapper (Rust core) — one small binary,
   no Node required.
 - More harnesses: Gemini CLI, opencode, aider, and yours.
