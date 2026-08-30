@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 — 2026-08-30
+
+The final cut of the day: everything below, in one package. The 0.6.0
+tarball was built from a tag cut before Warp landed and does not
+contain the command driver; 0.7.0 does. From here on, releases are
+weekly.
+
 ## 0.6.0 — 2026-08-30
 
 For people, not just engineers.

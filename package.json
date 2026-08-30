@@ -1,6 +1,6 @@
 {
   "name": "foolscap",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "The notebook for coding agents. Your agent sessions, rendered as documents — dense, replayable, shareable.",
   "bin": {
