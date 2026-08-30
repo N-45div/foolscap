@@ -12,8 +12,8 @@ for every agent you're running.**
 foolscap does three things, all local, all from the logs your coding
 agents already write:
 
-- **The fleet — many agents, one queue.** Run Claude Code, Codex or
-  Gemini CLI side by side. foolscap drives them, so it knows which one is
+- **The fleet — many agents, one queue.** Run Claude Code, Codex,
+  OpenCode or Antigravity side by side. foolscap drives them, so it knows which one is
   blocked on you, whose tests just went red, and which to leave alone.
   `n` jumps to the next thing that needs you.
 - **The prompt shelf — your prompt library, derived.** Every prompt
@@ -56,9 +56,9 @@ renderer, exporter and skill never know which tool wrote the session.
 | **Claude Code, natively**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | **Any ACP agent**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | **Devin** (cloud), via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
-| Gemini CLI | planned | — |
 | OpenCode | ✅ | `~/.local/share/opencode/opencode.db` (SQLite, read-only; Node 22.5+) |
-| aider | planned | `.aider.chat.history.md` |
+| Antigravity CLI / IDE | fleet ✅ (community adapter, see note) · archive: help wanted | — |
+| Conductor | next week | — |
 
 dsh sessions are zstd-compressed by default; foolscap decompresses them
 with Node's built-in zstd (Node 22.15+ — plain `.jsonl` works on any
@@ -121,7 +121,7 @@ working     ◌ queue-backoff     pnpm test                     —
   Code and Codex runs, and when Devin asks a question it needs you the
   same way a permission prompt does.
 
-Open **⚡ fleet** in the sidebar. Launching an agent runs code on your
+Open **⚡ Agents** in the sidebar. Launching an agent runs code on your
 machine, so the fleet API is loopback-only and refuses cross-origin
 requests outright.
 
@@ -130,13 +130,14 @@ requests outright.
 | Agent | How foolscap drives it | Permissions |
 |---|---|---|
 | **Claude Code** (default) | natively: `claude -p` with `stream-json` in and out — no adapter, nothing to download | Claude Code's `--permission-prompt-tool`, relayed through a tiny MCP server foolscap registers per session |
-| Codex, Gemini CLI, OpenCode, Claude Code via its adapter | [ACP](https://agentclientprotocol.com) over stdio | ACP `session/request_permission` |
+| Codex, OpenCode, Claude Code via its adapter | [ACP](https://agentclientprotocol.com) over stdio | ACP `session/request_permission` |
+| **Antigravity CLI** (`agy`) | ACP via the community adapter `agy-acp` — **read its README first**: Google's FAQ treats third-party access as a terms-of-service violation, so use an API-key setup or a secondary account. Antigravity has no headless mode of its own yet. | ACP |
 | Anything else that speaks ACP | give the launch command as the agent name | ACP |
 | **Devin** (cloud) | Devin's session API, polled — set `DEVIN_API_KEY` | Devin's questions land in the queue; you answer in text |
 
 Overrides, for custom installs or wrappers: `FOOLSCAP_CLAUDE="…"` for the
-native driver's binary; `FOOLSCAP_ACP_CLAUDE`, `_CODEX`, `_GEMINI`, `_OPENCODE`
-for the ACP adapters' launch commands. Adding a driver is one file under
+native driver's binary; `FOOLSCAP_ACP_CLAUDE`, `_CODEX`, `_OPENCODE`,
+`_ANTIGRAVITY` for the ACP adapters' launch commands. Adding a driver is one file under
 `server/drivers/` implementing `start / prompt / answerPermission /
 cancel / close` and feeding frames to the session.
 
@@ -158,11 +159,13 @@ loopback is the default and `--expose` warns loudly.
 ## Features
 
 - **Sessions as documents** — each prompt opens a numbered cell `[1]`,
-  `[2]`, …; the agent's work nests inside it
+  `[2]`, …; the agent's work nests inside it. Sessions are listed by
+  what you asked, not by an id
 - **The prompt shelf** — your prompt library, *derived*: every prompt
   you've ever sent, across harnesses, deduplicated with reuse counts.
   Filter, copy, star (stars live in `~/.foolscap`, never near session
-  files), and jump back to the session where you used one
+  files), and jump back to the session where you used one — under
+  **☆ Prompts** in the sidebar
 - **Search the whole archive** — every session, every harness, ranked by
   match count with a snippet; Enter to search, Esc to clear
 - **Cell permalinks & keyboard nav** — `#cell-7` deep-links a cell, in
@@ -280,7 +283,16 @@ If your agent writes a log, foolscap can be its notebook.
   session diffing, fleets across machines.
 - **Self-contained app.** Tauri wrapper (Rust core) — one small binary,
   no Node required.
-- More harnesses: Gemini CLI, opencode, aider, and yours.
+- More harnesses: Conductor next, Antigravity's archive once its on-disk
+  format is known, and yours — see CONTRIBUTING.md.
+
+## Contributing
+
+Issues and PRs welcome — [CONTRIBUTING.md](CONTRIBUTING.md) explains the
+two things people most want to add (a harness, a driver) as a
+step-by-step, and the issue templates ask for exactly what makes a
+request buildable: where the tool keeps its sessions and a synthetic
+sample of the format.
 
 ## Philosophy
 

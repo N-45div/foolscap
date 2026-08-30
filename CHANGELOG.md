@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.0 — 2026-08-30
+
+For people, not just engineers.
+
+### Added
+
+- **Session titles.** The archive lists sessions by what you asked —
+  the first real prompt, or the tool's own title for OpenCode — instead
+  of a hex id and a byte count.
+- **Antigravity CLI in the fleet**, via the community `agy-acp` adapter,
+  replacing Gemini CLI (whose consumer access ended June 18). Documented
+  with the adapter's own terms-of-service caveat.
+- **Plain words in the interface.** The three views are History, Prompts
+  and Agents (tooltips say what each is for); a first-run welcome
+  explains them in three cards and comes back from the `?` button; the
+  agent launcher asks "run / in folder / call it"; statuses read
+  "waiting for you", "finished", "hit a problem" instead of enum names;
+  empty states say what to do next.
+- **CONTRIBUTING.md** and issue templates (bug, harness request, driver
+  request) plus a PR template, so a request arrives with what makes it
+  buildable: where the tool keeps sessions and a synthetic sample.
+
+### Removed
+
+- aider from the roadmap.
+
 ## 0.5.0 — 2026-08-30
 
 Every agent you use, one archive, one queue.

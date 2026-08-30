@@ -48,10 +48,14 @@ export const AGENTS = {
     command: "npx",
     args: ["-y", "@agentclientprotocol/codex-acp"],
   },
-  gemini: {
-    label: "gemini cli",
-    command: "gemini",
-    args: ["--experimental-acp"],
+  // Antigravity CLI (`agy`) has no ACP mode of its own; this is the
+  // community adapter. Its README notes Google's FAQ treats third-party
+  // access as a terms-of-service violation — documented in the README,
+  // and the user's call.
+  antigravity: {
+    label: "antigravity cli",
+    command: "npx",
+    args: ["-y", "agy-acp"],
   },
   opencode: {
     label: "opencode",

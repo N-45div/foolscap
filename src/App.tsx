@@ -55,6 +55,67 @@ function fmtWhen(ms: number): string {
 }
 
 type Selected = { ref: SessionRef; source: SourceId };
+type View = "archive" | "shelf" | "fleet";
+
+/** Plain-language names for the three views; the tooltip says what each is for. */
+const VIEWS: Array<[View, string, string]> = [
+  ["archive", "History", "Every session your coding agents have run, readable as documents"],
+  ["shelf", "☆ Prompts", "Every prompt you've ever sent, with which ones actually worked"],
+  ["fleet", "⚡ Agents", "Run several agents at once and see which one needs you"],
+];
+
+const WELCOMED_KEY = "foolscap.welcomed";
+
+/**
+ * First-run welcome. Non-technical people shouldn't have to guess what
+ * "archive", "shelf" and "fleet" mean; this says it in three cards.
+ */
+function Welcome({ onPick, onClose }: { onPick: (v: View) => void; onClose: () => void }) {
+  const cards: Array<[View, string, string, string]> = [
+    ["archive", "History", "Everything your agents have done, as documents you can read, search and share.", "Show my history"],
+    ["shelf", "Prompts", "Every prompt you've ever sent — and which ones actually worked, from what happened next.", "See my prompts"],
+    ["fleet", "Agents", "Run several agents at once. foolscap tells you which one needs you.", "Run agents"],
+  ];
+  return (
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-paper/95 p-8 backdrop-blur-sm">
+      <div className="max-w-2xl">
+        <p className="font-mono text-lg font-bold">
+          Welcome to fools<span className="text-brass-bright">cap</span>.
+        </p>
+        <p className="mt-2 max-w-[60ch] text-sm leading-relaxed text-ink-2">
+          It reads what your coding agents already write to this machine — nothing is
+          uploaded anywhere — and turns it into three things:
+        </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {cards.map(([id, name, blurb, cta]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onPick(id)}
+              className="flex flex-col border border-rule bg-paper-sunk p-4 text-left transition-colors hover:border-brass-bright"
+            >
+              <span className="font-mono text-sm font-bold">{name}</span>
+              <span className="mt-1.5 flex-1 text-xs leading-relaxed text-ink-2">{blurb}</span>
+              <span className="instrument mt-3 text-brass-bright">{cta} →</span>
+            </button>
+          ))}
+        </div>
+        <p className="instrument mt-5">
+          tips · press <span className="text-brass-bright">n</span> in Agents for whoever needs you next ·{" "}
+          <span className="text-brass-bright">j</span>/<span className="text-brass-bright">k</span> walk a document ·
+          the ? at the top brings this back
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="instrument mt-4 border border-rule-strong px-3 py-1 hover:border-brass-bright hover:text-brass-bright"
+        >
+          got it
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function App() {
   const [projects, setProjects] = useState<Group[] | null>(null);
@@ -62,6 +123,21 @@ export function App() {
   const [selected, setSelected] = useState<Selected | null>(null);
   const [doc, setDoc] = useState<SessionDoc | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [help, setHelp] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(WELCOMED_KEY) !== "1";
+    } catch {
+      return false;
+    }
+  });
+  const dismissHelp = () => {
+    setHelp(false);
+    try {
+      localStorage.setItem(WELCOMED_KEY, "1");
+    } catch {
+      /* private mode: fine, it shows again next time */
+    }
+  };
 
   useEffect(() => {
     fetchProjects()
@@ -105,7 +181,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
-  const [view, setView] = useState<"archive" | "shelf" | "fleet">("archive");
+  const [view, setView] = useState<View>("archive");
 
   // Coming back to the archive picks up sessions the fleet recorded
   // since the page loaded — a finished agent is in the archive at once.
@@ -139,12 +215,24 @@ export function App() {
       {/* ── Sidebar: the archive ── */}
       <aside className="flex w-72 shrink-0 flex-col border-r border-rule bg-paper-sunk">
         <header className="flex items-baseline gap-2 border-b border-rule px-4 py-3">
-          <span className="font-mono text-sm font-bold tracking-tight">
+          <span
+            className="font-mono text-sm font-bold tracking-tight"
+            title="Local-first: nothing leaves this machine"
+          >
             fools<span className="text-brass-bright">cap</span>
           </span>
           <span className="instrument tnum ml-auto">
-            {sessionCount} sessions
+            {sessionCount} session{sessionCount === 1 ? "" : "s"}
           </span>
+          <button
+            type="button"
+            onClick={() => setHelp(true)}
+            aria-label="What is foolscap?"
+            title="What is foolscap?"
+            className="instrument border border-rule-strong px-1.5 leading-tight hover:border-brass-bright hover:text-brass-bright"
+          >
+            ?
+          </button>
         </header>
 
         <search className="flex items-center gap-2 border-b border-rule px-4 py-2">
@@ -156,7 +244,7 @@ export function App() {
               if (e.key === "Enter") runSearch();
               if (e.key === "Escape") clearSearch();
             }}
-            placeholder="search the archive…"
+            placeholder="search everything… then Enter"
             aria-label="Search all sessions"
             className="min-w-0 flex-1 bg-transparent font-mono text-xs text-ink outline-none placeholder:text-ink-3"
           />
@@ -167,7 +255,7 @@ export function App() {
               className="instrument hover:text-ink"
               aria-label="Clear search"
             >
-              esc
+              clear
             </button>
           )}
         </search>
@@ -195,10 +283,10 @@ export function App() {
                       }`}
                     >
                       <span className="flex items-baseline gap-2">
-                        <span className="tnum font-mono text-xs text-ink-2">
-                          {h.id.slice(0, 8)}
+                        <span className="line-clamp-1 font-mono text-xs text-ink" title={h.id}>
+                          {h.title ?? h.id.slice(0, 8)}
                         </span>
-                        <span className="tnum ml-auto font-mono text-[10px] text-brass-bright">
+                        <span className="tnum ml-auto shrink-0 font-mono text-[10px] text-brass-bright">
                           {h.count}×
                         </span>
                       </span>
@@ -212,7 +300,7 @@ export function App() {
             </>
           )}
           {!searching && hits === null && projects === null && !loadError && (
-            <p className="instrument px-4 py-6">reading the archive…</p>
+            <p className="instrument px-4 py-6">reading your sessions…</p>
           )}
           {loadError && hits === null && (
             <p className="px-4 py-6 font-mono text-xs text-oxide">
@@ -220,8 +308,17 @@ export function App() {
             </p>
           )}
           {hits === null && projects?.length === 0 && (
-            <p className="px-4 py-6 font-mono text-xs text-ink-3">
-              No sessions found. Run Claude Code once, then reopen.
+            <p className="px-4 py-6 font-mono text-xs leading-relaxed text-ink-3">
+              Nothing here yet. Use Claude Code, Codex, OpenCode or dsh once —
+              your sessions show up here on their own. Or open{" "}
+              <button
+                type="button"
+                onClick={() => setView("fleet")}
+                className="text-brass-bright hover:underline"
+              >
+                Agents
+              </button>{" "}
+              and start one from here.
             </p>
           )}
           {hits === null && projects?.map((p) => {
@@ -251,11 +348,14 @@ export function App() {
                           selected?.ref.file === s.file ? "bg-brass-wash" : ""
                         }`}
                       >
-                        <span className="tnum block font-mono text-xs text-ink-2">
-                          {fmtWhen(s.modified)}
+                        <span
+                          className="line-clamp-2 block font-mono text-xs leading-snug text-ink"
+                          title={s.id}
+                        >
+                          {s.title ?? `session ${s.id.slice(0, 8)}`}
                         </span>
-                        <span className="tnum block font-mono text-[11px] text-ink-3">
-                          {fmtBytes(s.bytes)} · {s.id.slice(0, 8)}
+                        <span className="tnum mt-0.5 block font-mono text-[11px] text-ink-3">
+                          {fmtWhen(s.modified)} · {fmtBytes(s.bytes)}
                         </span>
                       </button>
                     </li>
@@ -266,21 +366,15 @@ export function App() {
           })}
         </nav>
 
-        <footer className="flex items-baseline gap-3 border-t border-rule px-4 py-2">
-          <span className="instrument">local</span>
-          <nav className="ml-auto flex gap-3" aria-label="View">
-            {(
-              [
-                ["archive", "archive"],
-                ["shelf", "☆ shelf"],
-                ["fleet", "⚡ fleet"],
-              ] as const
-            ).map(([id, label]) => (
+        <footer className="border-t border-rule px-4 py-2">
+          <nav className="flex justify-between gap-2" aria-label="View">
+            {VIEWS.map(([id, label, tip]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setView(id)}
                 aria-pressed={view === id}
+                title={tip}
                 className={`instrument transition-colors hover:text-brass-bright ${
                   view === id ? "text-brass-bright" : ""
                 }`}
@@ -293,7 +387,16 @@ export function App() {
       </aside>
 
       {/* ── The document ── */}
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className="relative min-w-0 flex-1 overflow-y-auto">
+        {help && (
+          <Welcome
+            onPick={(v) => {
+              setView(v);
+              dismissHelp();
+            }}
+            onClose={dismissHelp}
+          />
+        )}
         {view === "fleet" && <Fleet />}
         {view === "shelf" && (
           <Shelf
@@ -304,7 +407,7 @@ export function App() {
           />
         )}
         {view === "archive" && parsing && (
-          <p className="instrument px-8 py-6">parsing…</p>
+          <p className="instrument px-8 py-6">opening…</p>
         )}
         {view === "archive" && !parsing && doc && (
           <Notebook
@@ -318,8 +421,8 @@ export function App() {
         )}
         {view === "archive" && !parsing && !doc && !loadError && (
           <div className="flex h-full items-center justify-center">
-            <p className="font-mono text-sm text-ink-3">
-              Select a session to read it as a document.
+            <p className="max-w-[44ch] text-center font-mono text-sm leading-relaxed text-ink-3">
+              Pick a session on the left to read what happened, top to bottom.
             </p>
           </div>
         )}

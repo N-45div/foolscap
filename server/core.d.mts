@@ -24,7 +24,7 @@ export declare function scanAll(roots: ArchiveRoots): Promise<
   Array<{
     source: string;
     dir: string;
-    sessions: Array<{ id: string; file: string; bytes: number; modified: number }>;
+    sessions: Array<{ id: string; title?: string; file: string; bytes: number; modified: number }>;
   }>
 >;
 
@@ -39,7 +39,7 @@ export type ShelfPrompt = {
   corrected: number;
   source: string;
   dir: string;
-  session: { id: string; file: string; bytes: number; modified: number };
+  session: { id: string; title?: string; file: string; bytes: number; modified: number };
   starred: boolean;
 };
 

@@ -53,6 +53,102 @@ export async function readSessionText(file) {
   return zlib.zstdDecompressSync(raw).toString("utf8");
 }
 
+// ── Session titles ───────────────────────────────────────────────────
+// A session is easier to find by what you asked than by a hex id. Each
+// scanner reads the head of the file and takes the first real prompt.
+
+const MAX_TITLE = 90;
+const oneLine = (t) => {
+  const s = String(t).replace(/\s+/g, " ").trim();
+  return s.length > MAX_TITLE ? s.slice(0, MAX_TITLE - 1) + "…" : s;
+};
+
+/** The first 64KB of a file — enough to find the first prompt. */
+async function readHead(file, bytes = 65536) {
+  const fh = await open(file, "r");
+  try {
+    const buf = Buffer.alloc(bytes);
+    const { bytesRead } = await fh.read(buf, 0, bytes, 0);
+    return buf.toString("utf8", 0, bytesRead);
+  } finally {
+    await fh.close();
+  }
+}
+
+/** Walk the head's lines (a truncated last line just fails to parse). */
+function titleFromLines(head, pick) {
+  for (const line of head.split(LINE_BREAK)) {
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const t = pick(e);
+    if (t) return oneLine(t);
+  }
+  return undefined;
+}
+
+const synthetic = (t) => !t || t.startsWith("<") || t.startsWith("[");
+
+const claudeTitle = (head) =>
+  titleFromLines(head, (e) => {
+    if (e?.type !== "user" || e.isSidechain) return undefined;
+    const c = e.message?.content;
+    let text = "";
+    if (typeof c === "string") text = c;
+    else if (Array.isArray(c))
+      text = c.filter((b) => b?.type === "text").map((b) => b.text ?? "").join(" ");
+    text = text.trim();
+    return synthetic(text) ? undefined : text;
+  });
+
+const CODEX_IDE_MARKER = "## My request for Codex:";
+const codexTitle = (head) =>
+  titleFromLines(head, (e) => {
+    const p = e?.payload;
+    if (e?.type !== "response_item" || p?.type !== "message" || p.role !== "user") return undefined;
+    if (!Array.isArray(p.content)) return undefined;
+    let t = p.content.map((b) => b?.text ?? "").join(" ").trim();
+    if (t.startsWith("# Context from my IDE setup")) {
+      const i = t.indexOf(CODEX_IDE_MARKER);
+      t = i === -1 ? "" : t.slice(i + CODEX_IDE_MARKER.length).trim();
+    }
+    return synthetic(t) ? undefined : t;
+  });
+
+const dshTitle = (head) =>
+  titleFromLines(head, (e) => {
+    if (e?.type !== "user/message") return undefined;
+    const m = e.data?.message;
+    let text = "";
+    if (typeof m === "string") text = m;
+    else if (typeof m?.text === "string") text = m.text;
+    else if (typeof m?.content === "string") text = m.content;
+    else if (Array.isArray(m?.content))
+      text = m.content.map((b) => (typeof b === "string" ? b : (b?.text ?? ""))).join(" ");
+    text = text.trim();
+    return synthetic(text) ? undefined : text;
+  });
+
+const acpTitle = (head) =>
+  titleFromLines(head, (e) => {
+    if (e?.type === "foolscap-acp") return e.name || undefined;
+    if (e?.dir !== "c2a") return undefined;
+    const m = e.msg ?? {};
+    if (m.method === "session/prompt") {
+      return (m.params?.prompt ?? []).map((b) => b?.text ?? "").join(" ").trim() || undefined;
+    }
+    if (m.type === "user") {
+      const c = m.message?.content;
+      const t = Array.isArray(c) ? c.map((b) => b?.text ?? "").join(" ") : String(c ?? "");
+      return t.trim() || undefined;
+    }
+    if (m.type === "devin/prompt") return String(m.text ?? "").trim() || undefined;
+    return undefined;
+  });
+
 /**
  * Resolve archive roots. FOOLSCAP_ROOT points at a curated archive and,
  * when set, is the ONLY thing scanned. Layouts:
@@ -106,14 +202,12 @@ async function scanAcp(root) {
     if (s.size === 0) continue;
 
     let cwd = "(unknown project)";
+    let title;
     try {
-      const fh = await open(full, "r");
-      const buf = Buffer.alloc(4096);
-      const { bytesRead } = await fh.read(buf, 0, 4096, 0);
-      await fh.close();
-      const head = buf.toString("utf8", 0, bytesRead);
+      const head = await readHead(full);
       const raw = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(head)?.[1];
       if (raw) cwd = JSON.parse(`"${raw}"`);
+      title = acpTitle(head);
     } catch {
       // unreadable header — keep the unknown-project bucket
     }
@@ -122,6 +216,7 @@ async function scanAcp(root) {
     const group = byCwd.get(key) ?? { display: cwd, sessions: [] };
     group.sessions.push({
       id: e.name.replace(/\.jsonl$/, ""),
+      title,
       file: full,
       bytes: s.size,
       modified: s.mtimeMs,
@@ -158,6 +253,7 @@ async function scanClaude(root) {
       if (s.size === 0) continue;
       sessions.push({
         id: e.name.replace(/\.jsonl$/, ""),
+        title: claudeTitle(await readHead(file).catch(() => "")),
         file,
         bytes: s.size,
         modified: s.mtimeMs,
@@ -196,14 +292,12 @@ async function scanCodex(root) {
       // session_meta's first line can exceed any fixed buffer (it embeds
       // the system prompt) — regex the head for cwd instead.
       let cwd = "(unknown project)";
+      let title;
       try {
-        const fh = await open(full, "r");
-        const buf = Buffer.alloc(4096);
-        const { bytesRead } = await fh.read(buf, 0, 4096, 0);
-        await fh.close();
-        const head = buf.toString("utf8", 0, bytesRead);
+        const head = await readHead(full);
         const raw = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(head)?.[1];
         if (raw) cwd = JSON.parse(`"${raw}"`);
+        title = codexTitle(head);
       } catch {
         // unreadable head — keep the unknown-project bucket
       }
@@ -213,7 +307,7 @@ async function scanCodex(root) {
         e.name.replace(/\.jsonl$/, "");
       const key = cwd.toLowerCase();
       const group = byCwd.get(key) ?? { display: cwd, sessions: [] };
-      group.sessions.push({ id, file: full, bytes: s.size, modified: s.mtimeMs });
+      group.sessions.push({ id, title, file: full, bytes: s.size, modified: s.mtimeMs });
       byCwd.set(key, group);
     }
   }
@@ -253,22 +347,20 @@ async function scanDsh(root) {
       // The header (line 1) carries cwd; for .zstd that means a full
       // decompress, so cap what we're willing to inflate during a scan.
       let cwd = "(unknown project)";
+      let title;
       try {
         let head = "";
         if (full.endsWith(".zstd")) {
           if (!hasZstd || s.size > 8 * 1024 * 1024) throw new Error("skip");
           head = zlib
             .zstdDecompressSync(await readFile(full))
-            .toString("utf8", 0, 4096);
+            .toString("utf8", 0, 65536);
         } else {
-          const fh = await open(full, "r");
-          const buf = Buffer.alloc(4096);
-          const { bytesRead } = await fh.read(buf, 0, 4096, 0);
-          await fh.close();
-          head = buf.toString("utf8", 0, bytesRead);
+          head = await readHead(full);
         }
         const raw = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(head)?.[1];
         if (raw) cwd = JSON.parse(`"${raw}"`);
+        title = dshTitle(head);
       } catch {
         // unreadable header — keep the unknown-project bucket
       }
@@ -277,7 +369,7 @@ async function scanDsh(root) {
       const id = dir.split(/[\\/]/).pop() ?? e.name;
       const key = cwd.toLowerCase();
       const group = byCwd.get(key) ?? { display: cwd, sessions: [] };
-      group.sessions.push({ id, file: full, bytes: s.size, modified: s.mtimeMs });
+      group.sessions.push({ id, title, file: full, bytes: s.size, modified: s.mtimeMs });
       byCwd.set(key, group);
     }
   }

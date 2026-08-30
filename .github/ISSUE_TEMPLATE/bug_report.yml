@@ -1,0 +1,48 @@
+name: Bug report
+description: Something foolscap does wrong
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what did you get?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: foolscap version and how you run it
+      placeholder: "0.5.0 via npx foolscap / pnpm dev from main"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version and OS
+      placeholder: "Node 24.11 on Windows 11 / macOS 15 / Ubuntu 24.04"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Archive (a session renders wrong or is missing)
+        - Prompt shelf / outcome evidence
+        - Fleet (launching or steering agents)
+        - "`foolscap acp` bridge"
+        - CLI / agent skill
+        - Export
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Synthetic sample (optional)
+      description: >
+        If a session renders wrong, a few lines of the log with made-up
+        content reproduce it best. Please never paste a real transcript —
+        they contain private material.
+      render: json

@@ -57,6 +57,25 @@ type Snapshot = {
 type Ranked = Snapshot & { attention: Attention };
 
 const HEADERS = { "content-type": "application/json", "x-foolscap": "fleet" };
+
+/** Status and stop reasons in plain words. */
+const STATUS_WORDS: Record<string, string> = {
+  starting: "starting up",
+  idle: "ready",
+  working: "working",
+  blocked: "waiting for you",
+  done: "finished",
+  exited: "closed",
+  error: "hit a problem",
+};
+const STOP_WORDS: Record<string, string> = {
+  end_turn: "finished",
+  cancelled: "stopped",
+  error: "hit an error",
+  expired: "expired",
+  max_tokens: "ran out of room",
+  refusal: "declined",
+};
 const post = (path: string, body?: unknown) =>
   fetch(path, { method: "POST", headers: HEADERS, body: JSON.stringify(body ?? {}) });
 
@@ -274,7 +293,7 @@ export function Fleet() {
       {/* ── The queue ── */}
       <section className="flex w-80 shrink-0 flex-col border-r border-rule bg-paper-sunk">
         <header className="flex items-baseline gap-3 border-b border-rule px-4 py-2">
-          <span className="font-mono text-sm font-bold">fleet</span>
+          <span className="font-mono text-sm font-bold">agents</span>
           <span className="instrument tnum">
             {ranked.length} agent{ranked.length === 1 ? "" : "s"}
             {needsYou > 0 && <span className="text-oxide"> · {needsYou} need you</span>}
@@ -299,7 +318,7 @@ export function Fleet() {
             doLaunch();
           }}
         >
-          <label className="instrument self-center" htmlFor="fleet-agent">agent</label>
+          <label className="instrument self-center" htmlFor="fleet-agent">run</label>
           <select
             id="fleet-agent"
             value={launch.agent}
@@ -312,21 +331,21 @@ export function Fleet() {
               </option>
             ))}
           </select>
-          <label className="instrument self-center" htmlFor="fleet-cwd">cwd</label>
+          <label className="instrument self-center" htmlFor="fleet-cwd">in folder</label>
           <input
             id="fleet-cwd"
             value={launch.cwd}
             onChange={(e) => setLaunch({ ...launch, cwd: e.target.value })}
-            placeholder="project directory (default: here)"
+            placeholder="e.g. C:\projects\my-app — blank means here"
             className="min-w-0 border border-rule bg-paper px-1.5 py-0.5 font-mono text-xs placeholder:text-ink-3"
           />
-          <label className="instrument self-center" htmlFor="fleet-name">name</label>
+          <label className="instrument self-center" htmlFor="fleet-name">call it</label>
           <div className="flex min-w-0 gap-1.5">
             <input
               id="fleet-name"
               value={launch.name}
               onChange={(e) => setLaunch({ ...launch, name: e.target.value })}
-              placeholder="optional"
+              placeholder="optional, e.g. fix-login"
               className="min-w-0 flex-1 border border-rule bg-paper px-1.5 py-0.5 font-mono text-xs placeholder:text-ink-3"
             />
             <button
@@ -341,10 +360,11 @@ export function Fleet() {
         <nav className="min-h-0 flex-1 overflow-y-auto">
           {sessions === null && <p className="instrument px-4 py-6">connecting…</p>}
           {sessions?.length === 0 && (
-            <p className="px-4 py-6 font-mono text-xs text-ink-3">
-              No agents running. Launch one above — then launch four more.
-              Press <span className="text-brass-bright">n</span> for whichever
-              needs you next.
+            <p className="px-4 py-6 font-mono text-xs leading-relaxed text-ink-3">
+              No agents running yet. Start one above: pick which agent, the
+              folder it should work in, and a name. Start a few — foolscap
+              tells you which one needs you, and{" "}
+              <span className="text-brass-bright">n</span> takes you there.
             </p>
           )}
           {[0, 1, 2, 3].map((tier) => {
@@ -402,7 +422,7 @@ export function Fleet() {
 
         <footer className="border-t border-rule px-4 py-2">
           <span className="instrument">
-            n next · a allow · d deny
+            keys · n next · a allow · d deny
           </span>
         </footer>
       </section>
@@ -514,10 +534,10 @@ export function Fleet() {
                 }}
                 placeholder={
                   canPrompt
-                    ? `prompt ${sel.name} — ⌘/ctrl+enter to send`
+                    ? `Tell ${sel.name} what to do next — Ctrl+Enter sends`
                     : sel.status === "blocked"
-                      ? "answer the permission request above first"
-                      : `${sel.name} is ${sel.status}`
+                      ? "Answer the question above first"
+                      : `${sel.name} is ${STATUS_WORDS[sel.status] ?? sel.status}`
                 }
                 disabled={!canPrompt}
                 rows={2}
@@ -525,9 +545,9 @@ export function Fleet() {
               />
               <div className="mt-2 flex items-baseline gap-3">
                 <span className="instrument">
-                  {sel.agentLabel} · {sel.status}
+                  {sel.agentLabel} · {STATUS_WORDS[sel.status] ?? sel.status}
                   {sel.activity && sel.status === "working" && ` · ${sel.activity.text}`}
-                  {sel.stopReason && sel.status === "done" && ` · ${sel.stopReason}`}
+                  {sel.stopReason && sel.status === "done" && ` · ${STOP_WORDS[sel.stopReason] ?? sel.stopReason}`}
                   {sel.url && (
                     <>
                       {" · "}
@@ -549,7 +569,7 @@ export function Fleet() {
                       onClick={() => post(`/api/fleet/${sel.id}/cancel`)}
                       className="instrument border border-rule-strong px-2.5 py-1 hover:border-oxide hover:text-oxide"
                     >
-                      cancel turn
+                      stop
                     </button>
                   )}
                   <button
@@ -558,9 +578,10 @@ export function Fleet() {
                       await post(`/api/fleet/${sel.id}/close`);
                       setSelected(null);
                     }}
+                    title="Shut this agent down and remove it from the list"
                     className="instrument border border-rule-strong px-2.5 py-1 hover:border-oxide hover:text-oxide"
                   >
-                    close agent
+                    close
                   </button>
                   <button
                     type="button"

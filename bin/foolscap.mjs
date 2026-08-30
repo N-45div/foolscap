@@ -148,7 +148,7 @@ ${exposeWarning}`);
   ${bold("foolscap --port")} ${dim("<n>")}      pick a port ${dim("(default 4517)")}
   ${bold("foolscap --no-open")}       don't launch the browser
 
-  ${bold("foolscap acp")} ${dim("--agent claude|codex|gemini")}   which harness to run
+  ${bold("foolscap acp")} ${dim("--agent claude|codex|opencode|antigravity")}   which harness to run
   ${dim("             --cwd <dir>       where it works (default: here)")}
   ${dim("             --port <n>        default 4518")}
   ${dim("             --expose          bind beyond loopback (dangerous)")}

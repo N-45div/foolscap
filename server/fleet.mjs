@@ -39,7 +39,7 @@ export const FLEET_AGENTS = {
   claude: { label: "claude code", driver: "claude" },
   "claude-acp": { label: "claude code · acp", driver: "acp", acp: "claude" },
   codex: { label: "codex", driver: "acp", acp: "codex" },
-  gemini: { label: "gemini cli", driver: "acp", acp: "gemini" },
+  antigravity: { label: "antigravity cli", driver: "acp", acp: "antigravity" },
   opencode: { label: "opencode", driver: "acp", acp: "opencode" },
   devin: { label: "devin", driver: "devin" },
 };

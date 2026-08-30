@@ -308,6 +308,8 @@ export function parseSession(ndjson: string): SessionDoc {
 
 export type SessionRef = {
   id: string;
+  /** The first real prompt, as a one-line title (or the tool's own). */
+  title?: string;
   file: string;
   bytes: number;
   modified: number;

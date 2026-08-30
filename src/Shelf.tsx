@@ -168,7 +168,7 @@ export function Shelf({
   return (
     <div>
       <header className="sticky top-0 z-10 flex items-baseline gap-4 border-b border-rule bg-paper/90 px-5 py-2 backdrop-blur-sm">
-        <span className="font-mono text-sm font-bold">prompt shelf</span>
+        <span className="font-mono text-sm font-bold">prompts</span>
         <span className="instrument tnum">
           {prompts ? `${prompts.length} distinct` : "reading…"}
           {starredCount > 0 && ` · ${starredCount} starred`}
@@ -177,7 +177,7 @@ export function Shelf({
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="filter prompts…"
+          placeholder="search your prompts…"
           aria-label="Filter prompts"
           className="ml-auto min-w-0 flex-1 max-w-72 bg-transparent text-right font-mono text-xs text-ink outline-none placeholder:text-ink-3"
         />
@@ -191,7 +191,7 @@ export function Shelf({
       )}
       {shown !== null && shown.length === 0 && (
         <p className="px-5 py-8 font-mono text-sm text-ink-3">
-          {q ? "No prompts match." : "No prompts found in the archive yet."}
+          {q ? "No prompts match." : "No prompts yet — they appear here once you've used an agent."}
         </p>
       )}
 
@@ -289,9 +289,10 @@ export function Shelf({
                 <button
                   type="button"
                   onClick={() => onOpen(p.session, p.source)}
+                  title="Open the session where you used this"
                   className="hover:text-brass-bright"
                 >
-                  open session
+                  open
                 </button>
               </p>
             </div>

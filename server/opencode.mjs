@@ -96,6 +96,7 @@ export function scanOpencode(root) {
       const group = byDir.get(key) ?? { display: dir, sessions: [] };
       group.sessions.push({
         id: r.id,
+        title: r.title || undefined,
         file: opencodeRef(dbPath, r.id),
         bytes: Number(r.bytes),
         modified: Number(r.time_updated ?? r.time_created ?? 0),
