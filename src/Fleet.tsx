@@ -294,10 +294,16 @@ export function Fleet() {
       <section className="flex w-80 shrink-0 flex-col border-r border-rule bg-paper-sunk">
         <header className="flex items-baseline gap-3 border-b border-rule px-4 py-2">
           <span className="font-mono text-sm font-bold">agents</span>
-          <span className="instrument tnum">
-            {ranked.length} agent{ranked.length === 1 ? "" : "s"}
-            {needsYou > 0 && <span className="text-oxide"> · {needsYou} need you</span>}
-            {needsYou === 0 && review > 0 && <span className="text-brass-bright"> · {review} to review</span>}
+          <span className="instrument tnum whitespace-nowrap">
+            {needsYou > 0 ? (
+              <span className="text-oxide">
+                {needsYou} need{needsYou === 1 ? "s" : ""} you
+              </span>
+            ) : review > 0 ? (
+              <span className="text-brass-bright">{review} to review</span>
+            ) : (
+              `${ranked.length} running`
+            )}
           </span>
           <button
             type="button"

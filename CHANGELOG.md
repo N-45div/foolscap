@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The Agents header says the one thing that matters — "1 needs you",
+  "2 to review", or "4 running" — and never wraps.
+
 ## 0.7.0 — 2026-08-30
 
 The final cut of the day: everything below, in one package. The 0.6.0
