@@ -17,6 +17,13 @@ import * as zlib from "node:zlib";
 import { judge, segmentsFor } from "./outcome.mjs";
 import { handleFleetApi } from "./fleet-api.mjs";
 import { acpArchiveDir } from "./acp.mjs";
+import {
+  opencodeDataDir,
+  opencodeDb,
+  parseOpencodeRef,
+  readOpencodeSession,
+  scanOpencode,
+} from "./opencode.mjs";
 
 /** Archives copied between machines carry both line endings. */
 const LINE_BREAK = /\r?\n/;
@@ -33,6 +40,9 @@ const hasZstd = typeof zlib.zstdDecompressSync === "function";
 
 /** Read a session file as text, decompressing .jsonl.zstd when needed. */
 export async function readSessionText(file) {
+  // OpenCode sessions live in SQLite; the reference names the row.
+  const oc = parseOpencodeRef(file);
+  if (oc) return readOpencodeSession(oc.db, oc.id);
   if (!file.endsWith(".zstd")) return readFile(file, "utf8");
   if (!hasZstd) {
     throw new Error(
@@ -57,13 +67,16 @@ export function resolveRoots(fixtureRoot) {
     const x = join(fixtureRoot, "codex");
     const d = join(fixtureRoot, "dsh");
     const a = join(fixtureRoot, "acp");
+    const o = join(fixtureRoot, "opencode");
     return {
       claudeRoot: existsSync(c) ? c : fixtureRoot,
       codexRoot: existsSync(x) ? x : null,
       dshRoot: existsSync(d) ? d : null,
       acpRoot: existsSync(a) ? a : null,
+      opencodeRoot: opencodeDb(o) ? o : null,
     };
   }
+  const opencode = opencodeDataDir();
   return {
     claudeRoot: join(homedir(), ".claude", "projects"),
     codexRoot: join(homedir(), ".codex", "sessions"),
@@ -71,6 +84,8 @@ export function resolveRoots(fixtureRoot) {
     dshRoot: process.env.DSH_HOME || join(homedir(), ".dsh"),
     // Sessions foolscap itself ran, through the fleet or the bridge.
     acpRoot: acpArchiveDir(),
+    // OpenCode: a SQLite database under its data dir, if it's installed.
+    opencodeRoot: opencodeDb(opencode) ? opencode : null,
   };
 }
 
@@ -280,6 +295,7 @@ export async function scanAll(roots) {
     ...(roots.codexRoot ? await scanCodex(roots.codexRoot) : []),
     ...(roots.dshRoot ? await scanDsh(roots.dshRoot) : []),
     ...(roots.acpRoot ? await scanAcp(roots.acpRoot) : []),
+    ...(roots.opencodeRoot ? scanOpencode(roots.opencodeRoot) : []),
   ];
 }
 
@@ -395,12 +411,17 @@ function send(res, status, type, body) {
 export async function handleApi(req, res, roots) {
   const url = new URL(req.url ?? "/", "http://localhost");
 
-  const allowed = (file) =>
-    (file.endsWith(".jsonl") || file.endsWith(".jsonl.zstd")) &&
-    (file.startsWith(roots.claudeRoot) ||
-      (roots.codexRoot !== null && file.startsWith(roots.codexRoot)) ||
-      (roots.dshRoot != null && file.startsWith(roots.dshRoot)) ||
-      (roots.acpRoot != null && file.startsWith(roots.acpRoot)));
+  const allowed = (file) => {
+    const oc = parseOpencodeRef(file);
+    if (oc) return roots.opencodeRoot != null && oc.db.startsWith(roots.opencodeRoot);
+    return (
+      (file.endsWith(".jsonl") || file.endsWith(".jsonl.zstd")) &&
+      (file.startsWith(roots.claudeRoot) ||
+        (roots.codexRoot !== null && file.startsWith(roots.codexRoot)) ||
+        (roots.dshRoot != null && file.startsWith(roots.dshRoot)) ||
+        (roots.acpRoot != null && file.startsWith(roots.acpRoot)))
+    );
+  };
 
   try {
     // The fleet has its own surface (live stream + verbs that run code).
@@ -461,15 +482,17 @@ export async function handleApi(req, res, roots) {
         send(res, 403, "text/plain", "forbidden");
         return true;
       }
-      const s = await stat(file);
-      if (s.size > MAX_SESSION_BYTES) {
-        send(
-          res,
-          413,
-          "text/plain",
-          `session is ${Math.round(s.size / 1048576)} MB — too large for the v0.1 viewer`,
-        );
-        return true;
+      if (!parseOpencodeRef(file)) {
+        const s = await stat(file);
+        if (s.size > MAX_SESSION_BYTES) {
+          send(
+            res,
+            413,
+            "text/plain",
+            `session is ${Math.round(s.size / 1048576)} MB — too large for the viewer`,
+          );
+          return true;
+        }
       }
       send(res, 200, "application/x-ndjson", await readSessionText(file));
       return true;

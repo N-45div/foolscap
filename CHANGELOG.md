@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-08-30
+
+Every agent you use, one archive, one queue.
 
 ### Added
 
@@ -13,6 +15,14 @@
   structured output land in the document; `open in devin ↗` links to
   the session. Set `DEVIN_API_KEY`. There is no cancel in Devin's API:
   cancelling stops foolscap watching the turn, and the log says so.
+- **OpenCode in the archive.** OpenCode keeps sessions in SQLite, not
+  files; foolscap reads `opencode.db` read-only through Node's built-in
+  `node:sqlite` (22.5+), expands a session into the same document shape
+  as every other harness (prompts as cells, `edit`/`bash` tool parts as
+  ledger rows with diffs, reasoning collapsed), and feeds the shelf and
+  the outcome judge. Subtask sessions fold into their parent. Honors
+  `OPENCODE_DATA_DIR`; without SQLite support OpenCode sessions are
+  simply absent rather than an error.
 - Permission requests can now carry `answer: "text"`, for agents that
   ask questions rather than allow/deny; the card shows a reply box.
 

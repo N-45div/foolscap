@@ -21,6 +21,7 @@ import { parseSession, prettyProjectName } from "./src/model.ts";
 import { parseCodexSession } from "./src/sources/codex.ts";
 import { parseDshSession } from "./src/sources/dsh.ts";
 import { parseAcpSession } from "./src/sources/acp.ts";
+import { parseOpencodeSession } from "./src/sources/opencode.ts";
 import { exportSessionHtml } from "./src/export.ts";
 import {
   collectPrompts,
@@ -31,12 +32,13 @@ import {
 
 /** The harness registry, resolved with explicit .ts specifiers: Node
     runs this file directly and does not do bundler-style resolution. */
-type SourceId = "claude" | "codex" | "dsh" | "acp";
+type SourceId = "claude" | "codex" | "dsh" | "acp" | "opencode";
 const SOURCES = {
   claude: { label: "claude code", parse: parseSession },
   codex: { label: "codex", parse: parseCodexSession },
   dsh: { label: "deepseek dsh", parse: parseDshSession },
   acp: { label: "fleet", parse: parseAcpSession },
+  opencode: { label: "opencode", parse: parseOpencodeSession },
 } as const;
 
 type Row = {

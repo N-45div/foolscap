@@ -238,6 +238,7 @@ async function banner(url) {
       codex: "codex",
       dsh: "deepseek dsh",
       acp: "fleet",
+      opencode: "opencode",
     };
     const label = (names[source] ?? source).padEnd(13);
     const sessions = `${s.sessions} session${s.sessions === 1 ? " " : "s"}`;

@@ -4,7 +4,7 @@
 for every agent you're running.**
 
 ![MIT license](https://img.shields.io/badge/license-MIT-b8860b)
-![Works with](https://img.shields.io/badge/works%20with-claude%20code%20·%20codex%20·%20dsh%20·%20any%20acp%20agent-1a1a1a)
+![Works with](https://img.shields.io/badge/works%20with-claude%20code%20·%20codex%20·%20opencode%20·%20dsh%20·%20devin%20·%20any%20acp%20agent-1a1a1a)
 ![PRs welcome](https://img.shields.io/badge/PRs-welcome-2f6349)
 
 ![Four agents in the fleet: one blocked on a permission, one with red tests, one waiting for review, one working](docs/fleet.png)
@@ -57,12 +57,14 @@ renderer, exporter and skill never know which tool wrote the session.
 | **Any ACP agent**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | **Devin** (cloud), via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | Gemini CLI | planned | — |
-| opencode | fleet ✅ (`opencode acp`) · archive planned | `~/.local/share/opencode/storage/` |
+| OpenCode | ✅ | `~/.local/share/opencode/opencode.db` (SQLite, read-only; Node 22.5+) |
 | aider | planned | `.aider.chat.history.md` |
 
 dsh sessions are zstd-compressed by default; foolscap decompresses them
 with Node's built-in zstd (Node 22.15+ — plain `.jsonl` works on any
-supported Node). `DSH_HOME` is honored, same as dsh itself.
+supported Node). `DSH_HOME` is honored, same as dsh itself. OpenCode keeps
+its sessions in SQLite; foolscap reads the database read-only through
+Node's built-in `node:sqlite` (22.5+) and honors `OPENCODE_DATA_DIR`.
 
 Your harness missing? [Adding one is a single file](#add-a-harness).
 
@@ -195,7 +197,7 @@ No build step — Node 24 runs the TypeScript directly:
 
 ```sh
 node cli.ts list                           # recent sessions, every harness
-node cli.ts list --source dsh              # claude | codex | dsh
+node cli.ts list --source dsh              # claude | codex | dsh | opencode | acp
 node cli.ts prompts --filter migration     # the prompt shelf, in the terminal
 node cli.ts prompts --starred              # your curated set
 node cli.ts export latest -o session.html  # shareable document

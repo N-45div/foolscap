@@ -330,11 +330,62 @@ function acpSegments(lines, seg) {
   }
 }
 
+/** OpenCode: the NDJSON the server expands from SQLite — a user
+    message's text parts are the prompt, an assistant's tool parts carry
+    state.{input,output,status}. */
+function opencodeSegments(lines, seg) {
+  let role = null;
+  let pending = null; // a user prompt being assembled from its parts
+  const flush = () => {
+    if (pending) seg.prompt(pending.text || "(empty prompt)", pending.at);
+    pending = null;
+  };
+  for (const line of lines) {
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e?.type === "message") {
+      if (e.role === "user") {
+        flush();
+        role = "user";
+        const ms = e.time?.created ?? e.time_created;
+        pending = { text: "", at: typeof ms === "number" ? new Date(ms).toISOString() : undefined };
+      } else {
+        flush();
+        role = e.role;
+      }
+      continue;
+    }
+    if (e?.type !== "part") continue;
+    const pt = e.partType ?? (typeof e.tool === "string" ? "tool" : "text");
+    if (role === "user") {
+      if (pt === "text" && typeof e.text === "string" && pending) {
+        pending.text = [pending.text, e.text].filter(Boolean).join("\n");
+      }
+      continue;
+    }
+    if (pt !== "tool") continue;
+    const st = e.state ?? {};
+    const input = { ...(st.input ?? {}) };
+    if (typeof input.filePath === "string") input.file_path = input.filePath;
+    if (typeof input.oldString === "string") input.old_string = input.oldString;
+    if (typeof input.newString === "string") input.new_string = input.newString;
+    const id = e.callID ?? `${e.messageID}:${e.id}`;
+    seg.tool(id, e.tool ?? "tool", input);
+    seg.result(id, [st.error, st.output].filter((s) => typeof s === "string" && s).join("\n"), st.status === "error");
+  }
+  flush();
+}
+
 const SEGMENTERS = {
   claude: claudeSegments,
   codex: codexSegments,
   dsh: dshSegments,
   acp: acpSegments,
+  opencode: opencodeSegments,
 };
 
 /** Split one session's lines into prompt segments. Unknown source → []. */

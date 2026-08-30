@@ -2,6 +2,7 @@ import { parseSession } from "../model";
 import { parseCodexSession } from "./codex";
 import { parseDshSession } from "./dsh";
 import { parseAcpSession } from "./acp";
+import { parseOpencodeSession } from "./opencode";
 import type { SessionDoc } from "../model";
 
 /**
@@ -9,7 +10,7 @@ import type { SessionDoc } from "../model";
  * source is one adapter that turns that harness's on-disk session format
  * into the neutral SessionDoc. Adding a harness = adding one file here.
  */
-export type SourceId = "claude" | "codex" | "dsh" | "acp";
+export type SourceId = "claude" | "codex" | "dsh" | "acp" | "opencode";
 
 export const SOURCES: Record<
   SourceId,
@@ -20,4 +21,5 @@ export const SOURCES: Record<
   dsh: { label: "deepseek dsh", parse: parseDshSession },
   // Any harness, via the protocol: sessions run through the fleet/bridge.
   acp: { label: "fleet", parse: parseAcpSession },
+  opencode: { label: "opencode", parse: parseOpencodeSession },
 };
