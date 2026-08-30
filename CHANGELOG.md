@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Devin in the fleet.** A third driver, and the first cloud one: no
+  process, no stdio — Devin's session API, polled. Create a session with
+  the prompt, send follow-ups as messages, and read `status_enum`: when
+  Devin is `blocked` it has asked you something, so it rises to the top
+  of the queue like a permission prompt does — with a reply box instead
+  of allow/deny, because Devin asks questions. The pull request and any
+  structured output land in the document; `open in devin ↗` links to
+  the session. Set `DEVIN_API_KEY`. There is no cancel in Devin's API:
+  cancelling stops foolscap watching the turn, and the log says so.
+- Permission requests can now carry `answer: "text"`, for agents that
+  ask questions rather than allow/deny; the card shows a reply box.
+
 ## 0.4.0 — 2026-08-30
 
 Drivers.

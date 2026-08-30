@@ -20,6 +20,7 @@
 
 import { TranscriptBuilder } from "./acp-doc.mjs";
 import { ClaudeStreamBuilder } from "./claude-stream.mjs";
+import { DevinBuilder } from "./devin-doc.mjs";
 
 // ── Evidence patterns ────────────────────────────────────────────────
 
@@ -312,6 +313,7 @@ function acpSegments(lines, seg) {
     // The header names the driver that produced the recording.
     if (f?.type === "foolscap-acp") {
       if (f.driver === "claude") builder = new ClaudeStreamBuilder();
+      if (f.driver === "devin") builder = new DevinBuilder();
       continue;
     }
     if (f?.dir !== "c2a" && f?.dir !== "a2c") continue;

@@ -152,7 +152,7 @@ export async function handleFleetApi(req, res, url, fleetOpts) {
       json(res, 200, s.snapshot());
     } else if (action === "permission") {
       const b = await readBody(req);
-      s.answerPermission(String(b.optionId ?? ""));
+      s.answerPermission(String(b.optionId ?? ""), typeof b.text === "string" ? b.text : undefined);
       json(res, 200, s.snapshot());
     } else if (action === "cancel") {
       s.cancel();

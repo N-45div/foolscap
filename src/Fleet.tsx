@@ -26,6 +26,8 @@ type Permission = {
   requestId: string | number;
   toolCall: { toolCallId?: string; title?: string; kind?: string };
   options: Array<{ optionId: string; name?: string; kind?: string }>;
+  /** "text" when the agent asked a question rather than allow/deny. */
+  answer?: "text";
 };
 
 type Snapshot = {
@@ -33,6 +35,9 @@ type Snapshot = {
   name: string;
   agent: string;
   agentLabel: string;
+  driver?: string;
+  /** Cloud agents have a page of their own. */
+  url?: string | null;
   cwd: string;
   status: "starting" | "idle" | "working" | "blocked" | "done" | "exited" | "error";
   stopReason?: string | null;
@@ -109,6 +114,7 @@ export function Fleet() {
   const [agents, setAgents] = useState<Array<{ id: string; label: string }>>([]);
   const [launch, setLaunch] = useState({ agent: "claude", cwd: "", name: "" });
   const [draft, setDraft] = useState("");
+  const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -203,10 +209,11 @@ export function Fleet() {
   }, [ranked, selected, open]);
 
   const decide = useCallback(
-    async (optionId: string) => {
+    async (optionId: string, text?: string) => {
       if (!sel) return;
-      const r = await post(`/api/fleet/${sel.id}/permission`, { optionId });
+      const r = await post(`/api/fleet/${sel.id}/permission`, { optionId, text });
       if (!r.ok) setError((await r.json()).error);
+      else setAnswer("");
     },
     [sel],
   );
@@ -424,12 +431,36 @@ export function Fleet() {
                   {sel.name} needs your permission
                   {sel.blockedSince && ` · waiting ${ago(sel.blockedSince, nowMs)}`}
                 </p>
-                <p className="mt-1 font-mono text-sm">
+                <p className="mt-1 whitespace-pre-wrap font-mono text-sm">
                   {sel.pendingPermission.toolCall.title ?? "an action"}
                   {sel.pendingPermission.toolCall.kind && (
                     <span className="instrument ml-2">{sel.pendingPermission.toolCall.kind}</span>
                   )}
                 </p>
+                {sel.pendingPermission.answer === "text" && (
+                  <form
+                    className="mt-2 flex gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (answer.trim()) decide("answer", answer);
+                    }}
+                  >
+                    <input
+                      value={answer}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      placeholder="your answer"
+                      aria-label="Answer the agent's question"
+                      className="min-w-0 flex-1 border border-rule bg-paper px-2 py-1 font-mono text-sm outline-none placeholder:text-ink-3 focus:border-brass-bright"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!answer.trim()}
+                      className="instrument border border-brass-bright px-2.5 py-1 text-brass-bright hover:bg-brass-wash disabled:opacity-40"
+                    >
+                      reply
+                    </button>
+                  </form>
+                )}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {sel.pendingPermission.options.map((o) => {
                     const deny = /reject|deny/i.test(o.kind ?? o.optionId);
@@ -497,6 +528,19 @@ export function Fleet() {
                   {sel.agentLabel} · {sel.status}
                   {sel.activity && sel.status === "working" && ` · ${sel.activity.text}`}
                   {sel.stopReason && sel.status === "done" && ` · ${sel.stopReason}`}
+                  {sel.url && (
+                    <>
+                      {" · "}
+                      <a
+                        href={sel.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brass-bright hover:underline"
+                      >
+                        open in {sel.agentLabel} ↗
+                      </a>
+                    </>
+                  )}
                 </span>
                 <div className="ml-auto flex gap-2">
                   {canCancel && (

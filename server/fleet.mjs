@@ -28,9 +28,11 @@ import { basename, join } from "node:path";
 import { AGENTS, Recorder, acpArchiveDir, resolveAgent } from "./acp.mjs";
 import { TranscriptBuilder } from "./acp-doc.mjs";
 import { ClaudeStreamBuilder } from "./claude-stream.mjs";
+import { DevinBuilder } from "./devin-doc.mjs";
 import { classifyRun, commandOf } from "./outcome.mjs";
 import { createAcpDriver } from "./drivers/acp.mjs";
 import { createClaudeDriver } from "./drivers/claude.mjs";
+import { createDevinDriver } from "./drivers/devin.mjs";
 
 /** What the launch form offers. Raw commands are treated as ACP agents. */
 export const FLEET_AGENTS = {
@@ -39,7 +41,10 @@ export const FLEET_AGENTS = {
   codex: { label: "codex", driver: "acp", acp: "codex" },
   gemini: { label: "gemini cli", driver: "acp", acp: "gemini" },
   opencode: { label: "opencode", driver: "acp", acp: "opencode" },
+  devin: { label: "devin", driver: "devin" },
 };
+
+const TRANSPORT = { claude: "native", devin: "cloud", acp: "acp" };
 
 const now = () => new Date().toISOString();
 
@@ -103,6 +108,10 @@ export class AgentSession extends EventEmitter {
       this.label = entry.label;
       this.driver = createClaudeDriver({ id, cwd, fleetUrl, ...hooks });
       this.builder = new ClaudeStreamBuilder();
+    } else if (this.driverKind === "devin") {
+      this.label = entry.label;
+      this.driver = createDevinDriver({ name, ...hooks });
+      this.builder = new DevinBuilder();
     } else {
       const spec = resolveAgent(entry?.acp ?? agent);
       this.label = entry?.label ?? spec.label;
@@ -228,13 +237,17 @@ export class AgentSession extends EventEmitter {
     this.changed();
   }
 
-  answerPermission(optionId) {
+  /** Answer the pending request: an option id, or free text when the
+      agent asked a question (`answer: "text"`). */
+  answerPermission(optionId, text) {
     const p = this.pendingPermission;
     if (!p) throw new Error("no permission is pending");
-    if (p.options.length && !p.options.some((o) => o.optionId === optionId)) {
+    if (p.answer === "text") {
+      if (typeof text !== "string" || !text.trim()) throw new Error("an answer is required");
+    } else if (p.options.length && !p.options.some((o) => o.optionId === optionId)) {
       throw new Error(`unknown option ${optionId}`);
     }
-    this.driver.answerPermission(p.requestId, optionId);
+    this.driver.answerPermission(p.requestId, optionId, text?.trim());
     this.pendingPermission = null;
     this.blockedSince = null;
     this.status = "working";
@@ -280,6 +293,7 @@ export class AgentSession extends EventEmitter {
       agent: this.agent,
       agentLabel: this.label,
       driver: this.driverKind,
+      url: this.driver.url ?? null,
       cwd: this.cwd,
       status: this.status,
       stopReason: this.stopReason,
@@ -305,7 +319,7 @@ export class AgentSession extends EventEmitter {
       cells: this.builder.cells,
       meta: {
         cwd: this.cwd,
-        agent: `${this.label}${model} · ${this.driverKind === "claude" ? "native" : "acp"}`,
+        agent: `${this.label}${model} · ${TRANSPORT[this.driverKind] ?? this.driverKind}`,
         startedAt: this.startedAt,
         endedAt: this.endedAt ?? undefined,
         totalOutputTokens: this.builder.totalOutputTokens ?? 0,

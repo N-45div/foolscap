@@ -55,6 +55,7 @@ renderer, exporter and skill never know which tool wrote the session.
 | DeepSeek Harness (dsh) | ✅ | `~/.dsh/…/session.jsonl[.zstd]` |
 | **Claude Code, natively**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | **Any ACP agent**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
+| **Devin** (cloud), via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | Gemini CLI | planned | — |
 | opencode | fleet ✅ (`opencode acp`) · archive planned | `~/.local/share/opencode/storage/` |
 | aider | planned | `.aider.chat.history.md` |
@@ -114,6 +115,9 @@ working     ◌ queue-backoff     pnpm test                     —
 - Each agent opens as a document: the same renderer as the archive,
   because it is the same document. Every session is recorded, so it's
   in your archive the moment it ends, with the same outcome evidence.
+- Local and cloud in one queue: a Devin session sits next to your Claude
+  Code and Codex runs, and when Devin asks a question it needs you the
+  same way a permission prompt does.
 
 Open **⚡ fleet** in the sidebar. Launching an agent runs code on your
 machine, so the fleet API is loopback-only and refuses cross-origin
@@ -126,6 +130,7 @@ requests outright.
 | **Claude Code** (default) | natively: `claude -p` with `stream-json` in and out — no adapter, nothing to download | Claude Code's `--permission-prompt-tool`, relayed through a tiny MCP server foolscap registers per session |
 | Codex, Gemini CLI, OpenCode, Claude Code via its adapter | [ACP](https://agentclientprotocol.com) over stdio | ACP `session/request_permission` |
 | Anything else that speaks ACP | give the launch command as the agent name | ACP |
+| **Devin** (cloud) | Devin's session API, polled — set `DEVIN_API_KEY` | Devin's questions land in the queue; you answer in text |
 
 Overrides, for custom installs or wrappers: `FOOLSCAP_CLAUDE="…"` for the
 native driver's binary; `FOOLSCAP_ACP_CLAUDE`, `_CODEX`, `_GEMINI`, `_OPENCODE`
