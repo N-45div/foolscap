@@ -2,6 +2,7 @@ import type { SessionDoc } from "../model";
 import { TranscriptBuilder } from "../../server/acp-doc.mjs";
 import { ClaudeStreamBuilder } from "../../server/claude-stream.mjs";
 import { DevinBuilder } from "../../server/devin-doc.mjs";
+import { CommandBuilder } from "../../server/command-doc.mjs";
 
 /**
  * ACP recording adapter — sessions that ran through foolscap's own
@@ -35,7 +36,7 @@ type Frame = { t?: string; dir?: "c2a" | "a2c"; msg?: unknown };
 
 export function parseAcpSession(ndjson: string): SessionDoc {
   // The header names the driver; until it's read, assume the protocol.
-  let builder: TranscriptBuilder | ClaudeStreamBuilder | DevinBuilder =
+  let builder: TranscriptBuilder | ClaudeStreamBuilder | DevinBuilder | CommandBuilder =
     new TranscriptBuilder();
   const meta: SessionDoc["meta"] = {
     totalOutputTokens: 0,
@@ -61,6 +62,7 @@ export function parseAcpSession(ndjson: string): SessionDoc {
       meta.startedAt = header.startedAt;
       if (header.driver === "claude") builder = new ClaudeStreamBuilder();
       if (header.driver === "devin") builder = new DevinBuilder();
+      if (header.driver === "command") builder = new CommandBuilder();
       continue;
     }
     const f = parsed as Frame;
@@ -70,8 +72,8 @@ export function parseAcpSession(ndjson: string): SessionDoc {
   }
 
   if ("totalOutputTokens" in builder) meta.totalOutputTokens = builder.totalOutputTokens;
-  const transport =
-    header?.driver === "claude" ? "native" : header?.driver === "devin" ? "cloud" : "acp";
+  const TRANSPORT: Record<string, string> = { claude: "native", devin: "cloud", command: "command" };
+  const transport = TRANSPORT[header?.driver ?? ""] ?? "acp";
   meta.agent = [header?.agent, transport, header?.name].filter(Boolean).join(" · ");
   return { cells: builder.cells as SessionDoc["cells"], meta };
 }

@@ -13,7 +13,7 @@ foolscap does three things, all local, all from the logs your coding
 agents already write:
 
 - **The fleet — many agents, one queue.** Run Claude Code, Codex,
-  OpenCode or Antigravity side by side. foolscap drives them, so it knows which one is
+  OpenCode, Antigravity or Warp side by side, and Devin in the cloud. foolscap drives them, so it knows which one is
   blocked on you, whose tests just went red, and which to leave alone.
   `n` jumps to the next thing that needs you.
 - **The prompt shelf — your prompt library, derived.** Every prompt
@@ -58,6 +58,7 @@ renderer, exporter and skill never know which tool wrote the session.
 | **Devin** (cloud), via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | OpenCode | ✅ | `~/.local/share/opencode/opencode.db` (SQLite, read-only; Node 22.5+) |
 | Antigravity CLI / IDE | fleet ✅ (community adapter, see note) · archive: help wanted | — |
+| Warp Agent | fleet ✅ (`oz agent run`, one process per turn — built from Warp's docs; please report) · archive: none (conversations sync to your Warp account) | — |
 | Conductor | next week | — |
 
 dsh sessions are zstd-compressed by default; foolscap decompresses them
@@ -134,10 +135,14 @@ requests outright.
 | **Antigravity CLI** (`agy`) | ACP via the community adapter `agy-acp` — **read its README first**: Google's FAQ treats third-party access as a terms-of-service violation, so use an API-key setup or a secondary account. Antigravity has no headless mode of its own yet. | ACP |
 | Anything else that speaks ACP | give the launch command as the agent name | ACP |
 | **Devin** (cloud) | Devin's session API, polled — set `DEVIN_API_KEY` | Devin's questions land in the queue; you answer in text |
+| **Warp Agent**, and any CLI with a headless `--prompt` | the **command driver**: one process per turn, prompt and folder filled into a template (`oz agent run --prompt … --cwd … --output-format json`), output read back | none — headless runs auto-approve by the agent's own config, so "needs you" means the turn ended |
 
 Overrides, for custom installs or wrappers: `FOOLSCAP_CLAUDE="…"` for the
 native driver's binary; `FOOLSCAP_ACP_CLAUDE`, `_CODEX`, `_OPENCODE`,
-`_ANTIGRAVITY` for the ACP adapters' launch commands. Adding a driver is one file under
+`_ANTIGRAVITY` for the ACP adapters' launch commands; `FOOLSCAP_WARP` for
+the whole command line of a command-driver agent, with `{prompt}` and
+`{cwd}` placeholders — e.g. to switch to the `warp` binary once its
+headless flags are published. Adding a driver is one file under
 `server/drivers/` implementing `start / prompt / answerPermission /
 cancel / close` and feeding frames to the session.
 

@@ -29,10 +29,12 @@ import { AGENTS, Recorder, acpArchiveDir, resolveAgent } from "./acp.mjs";
 import { TranscriptBuilder } from "./acp-doc.mjs";
 import { ClaudeStreamBuilder } from "./claude-stream.mjs";
 import { DevinBuilder } from "./devin-doc.mjs";
+import { CommandBuilder } from "./command-doc.mjs";
 import { classifyRun, commandOf } from "./outcome.mjs";
 import { createAcpDriver } from "./drivers/acp.mjs";
 import { createClaudeDriver } from "./drivers/claude.mjs";
 import { createDevinDriver } from "./drivers/devin.mjs";
+import { createCommandDriver } from "./drivers/command.mjs";
 
 /** What the launch form offers. Raw commands are treated as ACP agents. */
 export const FLEET_AGENTS = {
@@ -42,9 +44,24 @@ export const FLEET_AGENTS = {
   antigravity: { label: "antigravity cli", driver: "acp", acp: "antigravity" },
   opencode: { label: "opencode", driver: "acp", acp: "opencode" },
   devin: { label: "devin", driver: "devin" },
+  // Warp has no streaming mode or local store; its headless run is a
+  // one-shot command. Built from Warp's docs — FOOLSCAP_WARP overrides
+  // the command line (e.g. once the `warp` binary's headless flags land).
+  warp: {
+    label: "warp agent",
+    driver: "command",
+    template: ["oz", "agent", "run", "--prompt", "{prompt}", "--cwd", "{cwd}", "--output-format", "json"],
+  },
 };
 
-const TRANSPORT = { claude: "native", devin: "cloud", acp: "acp" };
+const TRANSPORT = { claude: "native", devin: "cloud", command: "command", acp: "acp" };
+
+/** A command-driver template, or its FOOLSCAP_<AGENT> override. */
+function commandTemplate(agentKey, entry) {
+  const override = process.env[`FOOLSCAP_${agentKey.toUpperCase()}`];
+  if (override) return override.trim().split(/\s+/);
+  return entry.template;
+}
 
 const now = () => new Date().toISOString();
 
@@ -112,6 +129,10 @@ export class AgentSession extends EventEmitter {
       this.label = entry.label;
       this.driver = createDevinDriver({ name, ...hooks });
       this.builder = new DevinBuilder();
+    } else if (this.driverKind === "command") {
+      this.label = entry.label;
+      this.driver = createCommandDriver({ template: commandTemplate(agent, entry), cwd, ...hooks });
+      this.builder = new CommandBuilder();
     } else {
       const spec = resolveAgent(entry?.acp ?? agent);
       this.label = entry?.label ?? spec.label;

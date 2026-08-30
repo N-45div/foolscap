@@ -9,6 +9,14 @@ For people, not just engineers.
 - **Session titles.** The archive lists sessions by what you asked —
   the first real prompt, or the tool's own title for OpenCode — instead
   of a hex id and a byte count.
+- **Warp Agent in the fleet, through a new command driver.** Warp has no
+  streaming protocol and no local store; its headless mode is a one-shot
+  `oz agent run --prompt … --cwd … --output-format json`. The command
+  driver runs one process per turn with the prompt and folder filled
+  into a template, reads the JSON (or plain text) it prints, and ends
+  the turn on exit — so any CLI agent with a `--prompt` fits. Built
+  from Warp's docs, not verified on a real install; `FOOLSCAP_WARP`
+  overrides the command line.
 - **Antigravity CLI in the fleet**, via the community `agy-acp` adapter,
   replacing Gemini CLI (whose consumer access ended June 18). Documented
   with the adapter's own terms-of-service caveat.
