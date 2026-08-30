@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-08-30
+
+Many agents, one queue.
 
 ### Added
 

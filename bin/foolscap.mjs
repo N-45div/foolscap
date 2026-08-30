@@ -240,7 +240,8 @@ async function banner(url) {
       acp: "fleet",
     };
     const label = (names[source] ?? source).padEnd(13);
-    return `  ${label}${String(s.sessions).padStart(4)} sessions ${dim("·")} ${s.projects} project${s.projects === 1 ? "" : "s"}`;
+    const sessions = `${s.sessions} session${s.sessions === 1 ? " " : "s"}`;
+    return `  ${label}${sessions.padStart(12)} ${dim("·")} ${s.projects} project${s.projects === 1 ? "" : "s"}`;
   });
 
   say(`
