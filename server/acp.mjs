@@ -53,6 +53,11 @@ export const AGENTS = {
     command: "gemini",
     args: ["--experimental-acp"],
   },
+  opencode: {
+    label: "opencode",
+    command: "opencode",
+    args: ["acp"],
+  },
 };
 
 /**
@@ -101,14 +106,18 @@ function tokenMatches(given, expected) {
  * Windows we build one command string and quote every argument
  * ourselves; everywhere else we spawn directly with no shell at all.
  */
-export function spawnAgent(spec, cwd) {
+export function spawnAgent(spec, cwd, env = process.env) {
   const stdio = ["pipe", "pipe", "pipe"];
+  // Agents that read $PWD (as Claude Code does) must see the launch
+  // directory there, not the shell foolscap happened to start from.
+  const childEnv = { ...env, PWD: cwd };
+  delete childEnv.OLDPWD;
   if (process.platform !== "win32") {
-    return spawn(spec.command, spec.args, { cwd, stdio });
+    return spawn(spec.command, spec.args, { cwd, stdio, env: childEnv });
   }
   const quote = (a) => `"${String(a).replaceAll('"', '\\"')}"`;
   const line = [spec.command, ...spec.args.map(quote)].join(" ");
-  return spawn(line, { cwd, stdio, shell: true, windowsHide: true });
+  return spawn(line, { cwd, stdio, env: childEnv, shell: true, windowsHide: true });
 }
 
 /**

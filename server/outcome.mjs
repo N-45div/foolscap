@@ -19,6 +19,7 @@
  */
 
 import { TranscriptBuilder } from "./acp-doc.mjs";
+import { ClaudeStreamBuilder } from "./claude-stream.mjs";
 
 // ── Evidence patterns ────────────────────────────────────────────────
 
@@ -300,12 +301,17 @@ function dshSegments(lines, seg) {
 /** Fleet/bridge recordings: replay the protocol into cells, then read
     those cells as segments. One path for every ACP harness. */
 function acpSegments(lines, seg) {
-  const builder = new TranscriptBuilder();
+  let builder = new TranscriptBuilder();
   for (const line of lines) {
     let f;
     try {
       f = JSON.parse(line);
     } catch {
+      continue;
+    }
+    // The header names the driver that produced the recording.
+    if (f?.type === "foolscap-acp") {
+      if (f.driver === "claude") builder = new ClaudeStreamBuilder();
       continue;
     }
     if (f?.dir !== "c2a" && f?.dir !== "a2c") continue;

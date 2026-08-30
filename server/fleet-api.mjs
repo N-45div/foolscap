@@ -1,6 +1,7 @@
 /**
- * The fleet's HTTP surface: a snapshot, a live event stream, and the
- * four verbs (launch, prompt, permission, cancel/close).
+ * The fleet's HTTP surface: a snapshot, a live event stream, the verbs
+ * (launch, prompt, permission, cancel/close), and the permission relay
+ * a native Claude Code agent asks through.
  *
  * Launching an agent runs code on this machine. The viewer binds to
  * loopback, but a web page on any origin can still make the browser
@@ -9,13 +10,12 @@
  * request cannot (the browser would need a CORS preflight, which we
  * never answer).
  */
-import { AGENTS } from "./acp.mjs";
 import { rank } from "./attention.mjs";
-import { getFleet } from "./fleet.mjs";
+import { FLEET_AGENTS, getFleet } from "./fleet.mjs";
 
 function sameOrigin(req) {
   const origin = req.headers.origin;
-  if (!origin) return true; // curl, the CLI, same-origin navigations
+  if (!origin) return true; // curl, the CLI, the relay, same-origin navigations
   try {
     return new URL(origin).host === req.headers.host;
   } catch {
@@ -73,6 +73,8 @@ function events(req, res, fleet) {
   });
 }
 
+const ROUTE = /^\/([a-z0-9]+)(?:\/(prompt|permission|cancel|close|ask)(?:\/([A-Za-z0-9_-]+))?)?$/;
+
 /** @returns {Promise<boolean>} true if the request was handled. */
 export async function handleFleetApi(req, res, url, fleetOpts) {
   if (!url.pathname.startsWith("/api/fleet")) return false;
@@ -97,7 +99,7 @@ export async function handleFleetApi(req, res, url, fleetOpts) {
     json(
       res,
       200,
-      Object.entries(AGENTS).map(([id, a]) => ({ id, label: a.label })),
+      Object.entries(FLEET_AGENTS).map(([id, a]) => ({ id, label: a.label, driver: a.driver })),
     );
     return true;
   }
@@ -107,17 +109,23 @@ export async function handleFleetApi(req, res, url, fleetOpts) {
   }
   if (rest === "/launch" && req.method === "POST") {
     const b = await readBody(req);
-    const snap = fleet.launch({ agent: b.agent, cwd: b.cwd, name: b.name });
+    const snap = fleet.launch({
+      agent: b.agent,
+      cwd: b.cwd,
+      name: b.name,
+      // The permission relay calls back to this same server.
+      fleetUrl: `http://${req.headers.host}`,
+    });
     json(res, 201, snap);
     return true;
   }
 
-  const m = /^\/([a-z0-9]+)(?:\/(prompt|permission|cancel|close))?$/.exec(rest);
+  const m = ROUTE.exec(rest);
   if (!m) {
     json(res, 404, { error: "no such route" });
     return true;
   }
-  const [, id, action] = m;
+  const [, id, action, arg] = m;
   const s = fleet.get(id);
   if (!s) {
     json(res, 404, { error: "no such session" });
@@ -127,8 +135,13 @@ export async function handleFleetApi(req, res, url, fleetOpts) {
   try {
     if (!action) {
       json(res, 200, { ...s.snapshot(), doc: s.doc() });
+    } else if (action === "ask" && req.method === "GET" && arg) {
+      json(res, 200, s.decision(arg));
     } else if (req.method !== "POST") {
       json(res, 405, { error: "POST required" });
+    } else if (action === "ask") {
+      const b = await readBody(req);
+      json(res, 202, { requestId: s.ask(b) });
     } else if (action === "prompt") {
       const b = await readBody(req);
       if (typeof b.text !== "string" || !b.text.trim()) {

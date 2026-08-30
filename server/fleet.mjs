@@ -4,33 +4,43 @@
  * Working with five running agents fails for one reason: every surface
  * shows you five terminals, so you end up polling all of them, and the
  * bookkeeping costs more than the work. The fleet inverts that. foolscap
- * is the ACP *client* for each agent: it sends the prompts, receives
- * the stream, and answers permission requests — so it knows, exactly
- * and in real time, which agent is blocked on you, which one's tests
- * just went red, and which is fine and should be left alone. The UI
- * shows that as a queue, not a grid.
+ * drives each agent itself — it sends the prompts, receives the stream,
+ * and answers permission requests — so it knows, exactly and in real
+ * time, which agent is blocked on you, which one's tests just went red,
+ * and which is fine and should be left alone. The UI shows that as a
+ * queue, not a grid.
  *
- * Each AgentSession is one stdio ACP agent process. The transcript is
- * built by the same TranscriptBuilder the archive adapter uses, and
- * every frame is recorded, so a session looks identical while it runs
- * and after it ends. Evidence (tests red/green, errors, files edited)
- * comes from the same classifier the archive judge uses — the moat, in
- * the present tense.
+ * Drivers own the transport; the session core owns everything else:
+ *   claude   Claude Code natively (stream-json; permissions via an MCP
+ *            relay) — no adapter to download
+ *   acp      any agent that speaks ACP over stdio (Codex, Gemini CLI,
+ *            Claude Code through its adapter, or a command you name)
  *
- * Capabilities we advertise to agents: none. No fs, no terminal. The
- * agent uses its own tools in its own cwd; foolscap only ever answers
- * session/request_permission. That keeps the trust boundary where the
- * harness already draws it.
+ * Whatever the driver, every frame is recorded, the document is built
+ * by the same builders the archive replays, and evidence (tests red or
+ * green, errors, files edited) comes from the same classifier the
+ * archive judge uses — the moat, in the present tense.
  */
 import { EventEmitter } from "node:events";
 import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { Recorder, acpArchiveDir, resolveAgent, spawnAgent } from "./acp.mjs";
+import { AGENTS, Recorder, acpArchiveDir, resolveAgent } from "./acp.mjs";
 import { TranscriptBuilder } from "./acp-doc.mjs";
+import { ClaudeStreamBuilder } from "./claude-stream.mjs";
 import { classifyRun, commandOf } from "./outcome.mjs";
+import { createAcpDriver } from "./drivers/acp.mjs";
+import { createClaudeDriver } from "./drivers/claude.mjs";
 
-const CLIENT_INFO = { name: "foolscap", title: "foolscap", version: "0.3.0" };
+/** What the launch form offers. Raw commands are treated as ACP agents. */
+export const FLEET_AGENTS = {
+  claude: { label: "claude code", driver: "claude" },
+  "claude-acp": { label: "claude code · acp", driver: "acp", acp: "claude" },
+  codex: { label: "codex", driver: "acp", acp: "codex" },
+  gemini: { label: "gemini cli", driver: "acp", acp: "gemini" },
+  opencode: { label: "opencode", driver: "acp", acp: "opencode" },
+};
+
 const now = () => new Date().toISOString();
 
 const freshEvidence = () => ({
@@ -53,7 +63,7 @@ function evidenceFor(cell) {
     if (run.failed) ev.testsFailed++;
     else if (run.passed) ev.testsPassed++;
     const isEdit =
-      tool.name === "edit" ||
+      /^(edit|Edit|Write|MultiEdit|NotebookEdit)$/.test(tool.name) ||
       typeof tool.input.old_string === "string" ||
       typeof tool.input.new_string === "string";
     if (isEdit && tool.input.file_path) edited.add(String(tool.input.file_path));
@@ -68,6 +78,7 @@ export class AgentSession extends EventEmitter {
     name,
     agent,
     cwd,
+    fleetUrl,
     record = true,
     recordDir = acpArchiveDir(),
     log = () => {},
@@ -77,10 +88,27 @@ export class AgentSession extends EventEmitter {
     this.name = name;
     this.agent = agent;
     this.cwd = cwd;
-    this.spec = resolveAgent(agent);
     this.record = record;
     this.recordDir = recordDir;
-    this.log = log;
+    this.log = (m) => log(`[${name}] ${m}`);
+
+    const entry = FLEET_AGENTS[agent];
+    this.driverKind = entry?.driver ?? "acp";
+    const hooks = {
+      log: this.log,
+      onFrame: (dir, msg) => this.onFrame(dir, msg),
+      onPermission: (p) => this.onPermission(p),
+    };
+    if (this.driverKind === "claude") {
+      this.label = entry.label;
+      this.driver = createClaudeDriver({ id, cwd, fleetUrl, ...hooks });
+      this.builder = new ClaudeStreamBuilder();
+    } else {
+      const spec = resolveAgent(entry?.acp ?? agent);
+      this.label = entry?.label ?? spec.label;
+      this.driver = createAcpDriver({ spec, cwd, ...hooks });
+      this.builder = new TranscriptBuilder();
+    }
 
     this.status = "starting"; // starting | idle | working | blocked | done | exited | error
     this.startedAt = now();
@@ -92,20 +120,17 @@ export class AgentSession extends EventEmitter {
     this.exitCode = null;
     this.error = null;
     this.stopReason = null;
-    this.sessionId = null;
     this.pendingPermission = null;
     this.evidence = freshEvidence();
-
-    this.builder = new TranscriptBuilder();
-    this.rpcId = 0;
-    this.pending = new Map();
-    this.buffered = "";
-    this.child = null;
     this.recorder = null;
   }
 
   get turns() {
     return this.builder.cells.length;
+  }
+
+  get sessionId() {
+    return this.driver.sessionId ?? null;
   }
 
   changed() {
@@ -118,61 +143,27 @@ export class AgentSession extends EventEmitter {
       this.recorder = new Recorder(join(this.recordDir, `${this.id}.jsonl`), {
         type: "foolscap-acp",
         version: 1,
+        driver: this.driverKind,
         id: this.id,
         name: this.name,
-        agent: this.spec.label,
-        command: [this.spec.command, ...this.spec.args].join(" "),
+        agent: this.label,
         cwd: this.cwd,
         startedAt: this.startedAt,
       });
     }
-
     try {
-      this.child = spawnAgent(this.spec, this.cwd);
-    } catch (err) {
-      this.fail(`could not start ${this.spec.command}: ${err.message}`);
-      return;
-    }
-
-    this.child.stdout.on("data", (chunk) => {
-      this.buffered += chunk.toString("utf8");
-      let nl;
-      while ((nl = this.buffered.indexOf("\n")) !== -1) {
-        const line = this.buffered.slice(0, nl).trim();
-        this.buffered = this.buffered.slice(nl + 1);
-        if (!line) continue;
-        let msg;
-        try {
-          msg = JSON.parse(line);
-        } catch {
-          continue; // banners and warnings are not protocol
-        }
-        this.receive(msg);
-      }
-    });
-    this.child.stderr.on("data", (c) =>
-      this.log(`[${this.name}] ${c.toString().trim()}`),
-    );
-    this.child.on("error", (err) => this.fail(err.message));
-    this.child.on("exit", (code) => {
-      if (this.status === "exited" || this.status === "error") return;
-      this.exitCode = code;
-      this.endedAt = now();
-      this.status = code === 0 ? "exited" : "error";
-      if (code !== 0) this.error ??= `agent exited with code ${code}`;
-      for (const [, p] of this.pending) p.reject(new Error("agent exited"));
-      this.pending.clear();
-      this.changed();
-    });
-
-    try {
-      await this.rpc("initialize", {
-        protocolVersion: 1,
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false } },
-        clientInfo: CLIENT_INFO,
+      await this.driver.start({
+        onExit: (code, err) => {
+          if (this.status === "exited" || this.status === "error") return;
+          this.exitCode = code;
+          this.endedAt = now();
+          this.status = err || code !== 0 ? "error" : "exited";
+          if (err) this.error = err.message;
+          else if (code !== 0) this.error ??= `agent exited with code ${code}`;
+          this.log(this.error ?? "exited");
+          this.changed();
+        },
       });
-      const r = await this.rpc("session/new", { cwd: this.cwd, mcpServers: [] });
-      this.sessionId = r?.sessionId ?? null;
       if (this.status === "starting") this.status = "idle";
       this.changed();
     } catch (err) {
@@ -184,79 +175,23 @@ export class AgentSession extends EventEmitter {
     this.status = "error";
     this.error = message;
     this.endedAt = now();
-    this.log(`[${this.name}] ${message}`);
+    this.log(message);
     this.changed();
   }
 
-  send(msg) {
-    this.recorder?.frame("c2a", msg);
-    this.builder.feed("c2a", msg, now());
-    this.child?.stdin.write(JSON.stringify(msg) + "\n");
-  }
-
-  /** JSON-RPC request. timeout 0 = wait forever (a prompt turn). */
-  rpc(method, params, { timeout = 90_000 } = {}) {
-    const id = this.rpcId++;
-    return new Promise((resolve, reject) => {
-      const timer =
-        timeout > 0
-          ? setTimeout(() => {
-              this.pending.delete(id);
-              reject(new Error(`${method} timed out`));
-            }, timeout)
-          : null;
-      this.pending.set(id, {
-        resolve: (v) => {
-          if (timer) clearTimeout(timer);
-          resolve(v);
-        },
-        reject: (e) => {
-          if (timer) clearTimeout(timer);
-          reject(e);
-        },
-      });
-      this.send({ jsonrpc: "2.0", id, method, params });
-    });
-  }
-
-  receive(msg) {
-    this.recorder?.frame("a2c", msg);
-    this.builder.feed("a2c", msg, now());
+  /** Every frame, either direction, from whichever driver. */
+  onFrame(dir, msg) {
+    this.recorder?.frame(dir, msg);
+    this.builder.feed(dir, msg, now());
+    this.evidence = evidenceFor(this.builder.current);
     this.lastActivityAt = now();
+    this.changed();
+  }
 
-    if (msg.id !== undefined && msg.method === undefined) {
-      // Response to one of our requests.
-      const p = this.pending.get(msg.id);
-      if (p) {
-        this.pending.delete(msg.id);
-        if (msg.error) p.reject(new Error(msg.error.message ?? "agent error"));
-        else p.resolve(msg.result);
-      }
-    } else if (msg.method && msg.id !== undefined) {
-      // A request from the agent to us.
-      if (msg.method === "session/request_permission") {
-        this.pendingPermission = {
-          requestId: msg.id,
-          toolCall: msg.params?.toolCall ?? {},
-          options: msg.params?.options ?? [],
-        };
-        this.status = "blocked";
-        this.blockedSince = now();
-      } else {
-        // We advertised no fs/terminal capabilities; say so honestly.
-        this.send({
-          jsonrpc: "2.0",
-          id: msg.id,
-          error: { code: -32601, message: `foolscap does not provide ${msg.method}` },
-        });
-      }
-    } else if (msg.method === "session/update") {
-      const u = msg.params?.update ?? {};
-      const kind = u.sessionUpdate ?? u.type;
-      if (kind === "tool_call" || kind === "tool_call_update") {
-        this.evidence = evidenceFor(this.builder.current);
-      }
-    }
+  onPermission(p) {
+    this.pendingPermission = p;
+    this.status = "blocked";
+    this.blockedSince = now();
     this.changed();
   }
 
@@ -269,11 +204,8 @@ export class AgentSession extends EventEmitter {
     this.doneAt = null;
     this.stopReason = null;
     this.evidence = freshEvidence();
-    this.rpc(
-      "session/prompt",
-      { sessionId: this.sessionId, prompt: [{ type: "text", text }] },
-      { timeout: 0 },
-    )
+    this.driver
+      .prompt(text)
       .then((r) => {
         this.stopReason = r?.stopReason ?? "end_turn";
         if (this.status === "working" || this.status === "blocked") {
@@ -289,7 +221,7 @@ export class AgentSession extends EventEmitter {
           this.stopReason = "error";
           this.doneAt = now();
           this.evidence.errors++;
-          this.log(`[${this.name}] turn failed: ${err.message}`);
+          this.log(`turn failed: ${err.message}`);
         }
         this.changed();
       });
@@ -302,33 +234,32 @@ export class AgentSession extends EventEmitter {
     if (p.options.length && !p.options.some((o) => o.optionId === optionId)) {
       throw new Error(`unknown option ${optionId}`);
     }
-    this.send({
-      jsonrpc: "2.0",
-      id: p.requestId,
-      result: { outcome: { outcome: "selected", optionId } },
-    });
+    this.driver.answerPermission(p.requestId, optionId);
     this.pendingPermission = null;
     this.blockedSince = null;
     this.status = "working";
     this.changed();
   }
 
-  cancel() {
-    if (this.pendingPermission) {
-      this.send({
-        jsonrpc: "2.0",
-        id: this.pendingPermission.requestId,
-        result: { outcome: { outcome: "cancelled" } },
-      });
-      this.pendingPermission = null;
-      this.blockedSince = null;
+  /** Native Claude Code asks through the permission relay. */
+  ask(args) {
+    if (typeof this.driver.ask !== "function") {
+      throw new Error("this driver does not relay permissions");
     }
+    return this.driver.ask(args);
+  }
+
+  decision(requestId) {
+    if (typeof this.driver.decision !== "function") return { decided: true, allow: false };
+    return this.driver.decision(requestId);
+  }
+
+  cancel() {
+    const pendingRequestId = this.pendingPermission?.requestId;
+    this.pendingPermission = null;
+    this.blockedSince = null;
     if (this.status === "working" || this.status === "blocked") {
-      this.send({
-        jsonrpc: "2.0",
-        method: "session/cancel",
-        params: { sessionId: this.sessionId },
-      });
+      this.driver.cancel({ pendingRequestId });
     }
     this.changed();
   }
@@ -338,9 +269,7 @@ export class AgentSession extends EventEmitter {
       this.status = "exited";
       this.endedAt = now();
     }
-    this.child?.kill();
-    for (const [, p] of this.pending) p.reject(new Error("session closed"));
-    this.pending.clear();
+    this.driver.close();
     this.changed();
   }
 
@@ -349,12 +278,13 @@ export class AgentSession extends EventEmitter {
       id: this.id,
       name: this.name,
       agent: this.agent,
-      agentLabel: this.spec.label,
+      agentLabel: this.label,
+      driver: this.driverKind,
       cwd: this.cwd,
       status: this.status,
       stopReason: this.stopReason,
       activity: this.builder.activity,
-      plan: this.builder.plan,
+      plan: this.builder.plan ?? null,
       pendingPermission: this.pendingPermission,
       evidence: this.evidence,
       turns: this.turns,
@@ -370,14 +300,15 @@ export class AgentSession extends EventEmitter {
   }
 
   doc() {
+    const model = this.builder.model ? ` · ${this.builder.model}` : "";
     return {
       cells: this.builder.cells,
       meta: {
         cwd: this.cwd,
-        agent: `${this.spec.label} · acp`,
+        agent: `${this.label}${model} · ${this.driverKind === "claude" ? "native" : "acp"}`,
         startedAt: this.startedAt,
         endedAt: this.endedAt ?? undefined,
-        totalOutputTokens: 0,
+        totalOutputTokens: this.builder.totalOutputTokens ?? 0,
         entryCount: this.builder.entryCount,
         skippedLines: 0,
       },
@@ -396,13 +327,14 @@ export class Fleet extends EventEmitter {
   }
 
   /** Spawn a session; returns at once — the agent boots in the background. */
-  launch({ agent = "claude", cwd = process.cwd(), name } = {}) {
+  launch({ agent = "claude", cwd = process.cwd(), name, fleetUrl } = {}) {
     const id = randomBytes(6).toString("hex");
     const s = new AgentSession({
       id,
       name: name?.trim() || `${basename(cwd) || "agent"}-${++this.counter}`,
       agent,
       cwd,
+      fleetUrl,
       record: this.record,
       recordDir: this.recordDir,
       log: this.log,
@@ -443,3 +375,5 @@ export function getFleet(opts) {
   singleton ??= new Fleet(opts);
   return singleton;
 }
+
+export { AGENTS as ACP_AGENTS };

@@ -19,7 +19,8 @@ Set `FOOLSCAP` to the repo path (default `~/foolscap`). All commands are
 ```sh
 node "$FOOLSCAP/cli.ts" list                       # 30 most recent, every harness
 node "$FOOLSCAP/cli.ts" list --project copperline  # filter by project path
-node "$FOOLSCAP/cli.ts" list --source dsh          # claude | codex | dsh
+node "$FOOLSCAP/cli.ts" list --source dsh          # claude | codex | dsh | acp
+node "$FOOLSCAP/cli.ts" list --source acp          # sessions foolscap ran itself (the fleet)
 ```
 
 Output: `id-prefix  timestamp  size  harness  project-path`. Session ids
@@ -58,6 +59,9 @@ one whole. Each line is JSON. What to look for, per harness:
 - **Codex** — `{type:"response_item", payload}`: `message` (role
   user/assistant), `function_call` (+ `function_call_output`, paired by
   `call_id`), `reasoning` (only `summary` is readable).
+- **fleet recordings** (`acp`) — a header line naming the driver, then
+  `{t, dir, msg}` frames: either ACP JSON-RPC or Claude Code's
+  stream-json. Use `cli.ts export` rather than reading them raw.
 - **dsh** — `{type, seq, time, data}` events after a header line:
   `user/message`, `assistant/message`, `tool/call` + `tool/result`
   (paired by `callId`). Files ending `.jsonl.zstd` are compressed —

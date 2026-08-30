@@ -1,5 +1,6 @@
 import type { SessionDoc } from "../model";
 import { TranscriptBuilder } from "../../server/acp-doc.mjs";
+import { ClaudeStreamBuilder } from "../../server/claude-stream.mjs";
 
 /**
  * ACP recording adapter — sessions that ran through foolscap's own
@@ -20,6 +21,8 @@ import { TranscriptBuilder } from "../../server/acp-doc.mjs";
 type Header = {
   type?: string;
   version?: number;
+  /** "acp" (the protocol itself) or "claude" (Claude Code's stream-json). */
+  driver?: string;
   id?: string;
   name?: string;
   agent?: string;
@@ -30,7 +33,8 @@ type Header = {
 type Frame = { t?: string; dir?: "c2a" | "a2c"; msg?: unknown };
 
 export function parseAcpSession(ndjson: string): SessionDoc {
-  const builder = new TranscriptBuilder();
+  // The header names the driver; until it's read, assume the protocol.
+  let builder: TranscriptBuilder | ClaudeStreamBuilder = new TranscriptBuilder();
   const meta: SessionDoc["meta"] = {
     totalOutputTokens: 0,
     entryCount: 0,
@@ -53,6 +57,7 @@ export function parseAcpSession(ndjson: string): SessionDoc {
       header = parsed as Header;
       meta.cwd = header.cwd;
       meta.startedAt = header.startedAt;
+      if (header.driver === "claude") builder = new ClaudeStreamBuilder();
       continue;
     }
     const f = parsed as Frame;
@@ -61,6 +66,8 @@ export function parseAcpSession(ndjson: string): SessionDoc {
     builder.feed(f.dir, f.msg, f.t);
   }
 
-  meta.agent = [header?.agent, "acp", header?.name].filter(Boolean).join(" · ");
+  if ("totalOutputTokens" in builder) meta.totalOutputTokens = builder.totalOutputTokens;
+  const transport = header?.driver === "claude" ? "native" : "acp";
+  meta.agent = [header?.agent, transport, header?.name].filter(Boolean).join(" · ");
   return { cells: builder.cells as SessionDoc["cells"], meta };
 }

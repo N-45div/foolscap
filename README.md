@@ -1,19 +1,28 @@
 # foolscap
 
-**The notebook for coding agents.** Your agent sessions, rendered as
-documents — dense, replayable, shareable.
+**Your agent history, turned into something you can use — and one queue
+for every agent you're running.**
 
 ![MIT license](https://img.shields.io/badge/license-MIT-b8860b)
-![Works with](https://img.shields.io/badge/works%20with-claude%20code%20·%20codex%20·%20dsh-1a1a1a)
+![Works with](https://img.shields.io/badge/works%20with-claude%20code%20·%20codex%20·%20dsh%20·%20any%20acp%20agent-1a1a1a)
 ![PRs welcome](https://img.shields.io/badge/PRs-welcome-2f6349)
 
-![A Codex session rendered as a foolscap document](docs/screenshot.png)
+![Four agents in the fleet: one blocked on a permission, one with red tests, one waiting for review, one working](docs/fleet.png)
 
-Jupyter didn't beat the REPL with a prettier terminal — it turned sessions
-into **documents**. Agent sessions deserve the same. Every run becomes a
-notebook you can read top-to-bottom, audit, and hand to someone else:
-prompts as numbered cells; diffs, tool calls, thinking and costs as outputs
-nested inside them.
+foolscap does three things, all local, all from the logs your coding
+agents already write:
+
+- **The fleet — many agents, one queue.** Run Claude Code, Codex or
+  Gemini CLI side by side. foolscap drives them, so it knows which one is
+  blocked on you, whose tests just went red, and which to leave alone.
+  `n` jumps to the next thing that needs you.
+- **The prompt shelf — your prompt library, derived.** Every prompt
+  you've ever sent, deduplicated, with reuse counts and **outcome
+  evidence**: which ones actually worked, read from what happened next.
+  No model call.
+- **Sessions as documents.** Every run, from any harness, rendered as a
+  notebook you can read top to bottom, search, export as one HTML file,
+  and hand to someone else.
 
 > _foolscap: the paper ledgers were written on._
 
@@ -22,13 +31,15 @@ nested inside them.
 ## Why
 
 Terminals are superb for issuing precise commands and terrible for reading
-what an agent *did*. The record of hours of agent work — every edit, every
-command, every decision — disappears into scrollback, or into JSONL files
-nobody opens. That record deserves to be a legible artifact:
+what an agent *did* — and hopeless for keeping track of five agents at
+once. The record of hours of agent work disappears into scrollback, or
+into JSONL files nobody opens. foolscap treats that record as the asset
+it is:
 
 - **Reviewable** — see every change an agent made, as diffs, in context
 - **Recallable** — "what did we do in Tuesday's session?" has an answer
-- **Shareable** — a session exports to one self-contained HTML file
+- **Reusable** — the prompts that worked are one click from working again
+- **Steerable** — the agents running now are one queue, not five tabs
 - **Yours** — local-first; your sessions never leave your disk
 
 ## Supported harnesses
@@ -42,9 +53,10 @@ renderer, exporter and skill never know which tool wrote the session.
 | Claude Code | ✅ | `~/.claude/projects/**/*.jsonl` |
 | Codex CLI | ✅ | `~/.codex/sessions/**/rollout-*.jsonl` |
 | DeepSeek Harness (dsh) | ✅ | `~/.dsh/…/session.jsonl[.zstd]` |
+| **Claude Code, natively**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | **Any ACP agent**, via the fleet | ✅ | `~/.foolscap/acp/*.jsonl` (recorded by foolscap) |
 | Gemini CLI | planned | — |
-| opencode | planned | — |
+| opencode | fleet ✅ (`opencode acp`) · archive planned | `~/.local/share/opencode/storage/` |
 | aider | planned | `.aider.chat.history.md` |
 
 dsh sessions are zstd-compressed by default; foolscap decompresses them
@@ -81,12 +93,12 @@ pnpm dev        # http://localhost:5173
 
 Running five agents at once fails for one reason: every surface shows
 you five terminals, so you poll all of them and the bookkeeping costs
-more than the work. The fleet inverts it. foolscap is the [ACP](https://agentclientprotocol.com)
-client for each agent — it sends the prompts, receives the stream,
-answers permission requests — so it knows, exactly and live, which agent
-is **blocked on you**, which one's **tests just went red**, which is
-**done and waiting**, and which is fine and should be left alone. That's
-shown as a queue, not a grid:
+more than the work. The fleet inverts it. foolscap **drives** each agent
+— it sends the prompts, receives the stream, answers permission
+requests — so it knows, exactly and live, which agent is **blocked on
+you**, which one's **tests just went red**, which is **done and
+waiting**, and which is fine and should be left alone. That's shown as
+a queue, not a grid:
 
 ```
 needs you   ⚠ auth-refactor     waiting for permission        12s
@@ -102,12 +114,24 @@ working     ◌ queue-backoff     pnpm test                     —
 - Each agent opens as a document: the same renderer as the archive,
   because it is the same document. Every session is recorded, so it's
   in your archive the moment it ends, with the same outcome evidence.
-- Works with any agent that speaks ACP over stdio: Claude Code, Codex,
-  Gemini CLI, or a command you name.
 
 Open **⚡ fleet** in the sidebar. Launching an agent runs code on your
 machine, so the fleet API is loopback-only and refuses cross-origin
 requests outright.
+
+### Drivers
+
+| Agent | How foolscap drives it | Permissions |
+|---|---|---|
+| **Claude Code** (default) | natively: `claude -p` with `stream-json` in and out — no adapter, nothing to download | Claude Code's `--permission-prompt-tool`, relayed through a tiny MCP server foolscap registers per session |
+| Codex, Gemini CLI, OpenCode, Claude Code via its adapter | [ACP](https://agentclientprotocol.com) over stdio | ACP `session/request_permission` |
+| Anything else that speaks ACP | give the launch command as the agent name | ACP |
+
+Overrides, for custom installs or wrappers: `FOOLSCAP_CLAUDE="…"` for the
+native driver's binary; `FOOLSCAP_ACP_CLAUDE`, `_CODEX`, `_GEMINI`, `_OPENCODE`
+for the ACP adapters' launch commands. Adding a driver is one file under
+`server/drivers/` implementing `start / prompt / answerPermission /
+cancel / close` and feeding frames to the session.
 
 ### `foolscap acp` — an agent over the network
 
@@ -122,9 +146,7 @@ foolscap acp --agent claude --cwd ~/myproject
 ```
 
 A token is required and generated per run (there is no open mode);
-loopback is the default and `--expose` warns loudly. To launch a known
-agent through a custom install or wrapper, set
-`FOOLSCAP_ACP_CLAUDE="…"` (or `_CODEX`, `_GEMINI`) to the command.
+loopback is the default and `--expose` warns loudly.
 
 ## Features
 
@@ -244,9 +266,9 @@ If your agent writes a log, foolscap can be its notebook.
 
 ## Roadmap
 
-- **v0.3 — the fleet** (shipping now): steer many agents from one
-  queue; remote agents via `foolscap acp`; outcome evidence live.
-- **v0.4 — The notebook earns its name.** Re-run a cell with an edited
+- **v0.4 — drivers** (shipping now): Claude Code natively, any ACP
+  agent, and a one-file path to add more.
+- **v0.5 — The notebook earns its name.** Re-run a cell with an edited
   prompt (the shelf becomes a launcher), fork a session from any point,
   session diffing, fleets across machines.
 - **Self-contained app.** Tauri wrapper (Rust core) — one small binary,

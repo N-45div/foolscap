@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.0 — 2026-08-30
+
+Drivers.
+
+### Added
+
+- **Claude Code, natively, in the fleet.** A second driver: `claude -p`
+  with `stream-json` in and out — Claude Code's own multi-turn protocol,
+  no adapter to download. Permission prompts still reach the queue:
+  Claude Code's `--permission-prompt-tool` calls a tiny MCP server
+  foolscap registers per session, which posts the question to the
+  fleet (top of the queue), polls until you answer with `a`/`d`, and
+  returns the verdict. Verified against the real binary. It is the
+  default agent; `FOOLSCAP_CLAUDE` overrides the binary.
+- **OpenCode in the fleet** — `opencode acp` speaks ACP over stdio, so it
+  is one registry entry: pick it in the launch form or `--agent opencode`.
+- **A driver layer.** Transport lives in `server/drivers/*` (`acp`,
+  `claude`); the session core, the document builders, the recorder and
+  the evidence engine are shared. Recordings carry the driver in their
+  header, so the archive adapter replays each with the right builder.
+
+### Changed
+
+- Agents launched by the fleet get `$PWD` set to their launch directory
+  (some tools read it in preference to the process cwd). Verified: the
+  real Claude Code reports the fleet's launch directory as its cwd.
+
 ## 0.3.0 — 2026-08-30
 
 Many agents, one queue.
