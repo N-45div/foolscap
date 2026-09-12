@@ -8,6 +8,8 @@ import { SOURCES, type SourceId } from "./sources";
 import { Notebook } from "./Notebook";
 import { Shelf } from "./Shelf";
 import { Fleet } from "./Fleet";
+import { Workspace, type WorkspaceMode } from "./workspace/Workspace";
+import { Voice } from "./voice/Voice";
 
 type Group = { source: SourceId; dir: string; sessions: SessionRef[] };
 
@@ -55,10 +57,15 @@ function fmtWhen(ms: number): string {
 }
 
 type Selected = { ref: SessionRef; source: SourceId };
-type View = "archive" | "shelf" | "fleet";
+type View = "workspace" | "board" | "knowledge" | "voice" | "usage" | "archive" | "shelf" | "fleet";
 
 /** Plain-language names for the three views; the tooltip says what each is for. */
 const VIEWS: Array<[View, string, string]> = [
+  ["workspace", "Workspace", "Your connected company and codebase command center"],
+  ["board", "Board", "Plan and move work across the execution lifecycle"],
+  ["knowledge", "Graph", "Explore connected sources, entities, and backlinks"],
+  ["voice", "Voice", "Talk to the workspace and delegate durable work"],
+  ["usage", "Usage", "See execution spend, budgets, and context coverage"],
   ["archive", "History", "Every session your coding agents have run, readable as documents"],
   ["shelf", "☆ Prompts", "Every prompt you've ever sent, with which ones actually worked"],
   ["fleet", "⚡ Agents", "Run several agents at once and see which one needs you"],
@@ -181,7 +188,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
-  const [view, setView] = useState<View>("archive");
+  const [view, setView] = useState<View>("workspace");
 
   // Coming back to the archive picks up sessions the fleet recorded
   // since the page loaded — a finished agent is in the archive at once.
@@ -367,7 +374,7 @@ export function App() {
         </nav>
 
         <footer className="border-t border-rule px-4 py-2">
-          <nav className="flex justify-between gap-2" aria-label="View">
+          <nav className="flex flex-wrap justify-between gap-x-3 gap-y-2" aria-label="View">
             {VIEWS.map(([id, label, tip]) => (
               <button
                 key={id}
@@ -397,6 +404,13 @@ export function App() {
             onClose={dismissHelp}
           />
         )}
+        {(view === "workspace" || view === "board" || view === "knowledge" || view === "usage") && (
+          <Workspace
+            mode={view as WorkspaceMode}
+            onOpenAgents={() => setView("fleet")}
+          />
+        )}
+        {view === "voice" && <Voice />}
         {view === "fleet" && <Fleet />}
         {view === "shelf" && (
           <Shelf
