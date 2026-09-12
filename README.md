@@ -9,9 +9,12 @@ for every agent you're running.**
 
 ![Four agents in the fleet: one blocked on a permission, one with red tests, one waiting for review, one working](docs/fleet.png)
 
-foolscap does three things, all local, all from the logs your coding
-agents already write:
+foolscap does four things, with its workspace state stored locally:
 
+- **The workspace — context to execution.** Connect repositories and notes,
+  explore their file/import/link graph, capture work on a Kanban board, and
+  dispatch ready tasks to ACP agents under explicit budget and concurrency
+  limits. Every routing decision and execution attempt stays reviewable.
 - **The fleet — many agents, one queue.** Run Claude Code, Codex,
   OpenCode, Antigravity or Warp side by side, and Devin in the cloud. foolscap drives them, so it knows which one is
   blocked on you, whose tests just went red, and which to leave alone.
@@ -41,6 +44,25 @@ it is:
 - **Reusable** — the prompts that worked are one click from working again
 - **Steerable** — the agents running now are one queue, not five tabs
 - **Yours** — local-first; your sessions never leave your disk
+
+Workspace state lives at `~/.foolscap/workspace.json`. Connecting a source
+indexes up to 400 text/code files while skipping generated, dependency, and
+hidden directories. Open **Workspace**, add tasks on **Board**, inspect
+relationships in **Graph**, and review token/cost evidence and routing reasons
+under **Usage**. **Dispatch ready** fills available fleet capacity using the
+workspace's budget and load policy.
+
+**Voice** is the local BYOK path: set `OPENAI_API_KEY`, open the Voice view,
+and start a conversation. The browser connects to `gpt-live-1` over WebRTC
+through Foolscap's loopback session broker, so the project key never enters
+browser JavaScript. GPT-Live delegates workspace operations to a low-latency
+Responses backend (`gpt-5.6-luna` by default), which calls the same local
+task, search, and coordinator APIs as the visual interface. Override the
+backend with `FOOLSCAP_VOICE_BACKEND_MODEL`.
+
+```sh
+OPENAI_API_KEY=your_project_key npx foolscap
+```
 
 ## Supported harnesses
 
@@ -187,7 +209,8 @@ loopback is the default and `--expose` warns loudly.
   the way when you don't
 - **Provenance header** — cwd, branch, harness + version, cell count,
   token totals where the format records them; tabular numerals throughout
-- **Read-only by construction** — foolscap never writes to session files
+- **Session archives stay read-only** — workspace metadata is written under
+  `~/.foolscap`; existing harness session files are never modified
 
 ## Export
 

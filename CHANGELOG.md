@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- A persistent local workspace joins repositories, graph entities, Kanban
+  tasks, agent attempts, and usage evidence in one interface.
+- Repository indexing builds source-backed file, import, and Markdown-link
+  relationships while skipping dependencies and generated output.
+- Ready tasks can be dispatched through the existing fleet. The coordinator
+  enforces budget and concurrency limits, balances agent load, and records why
+  each route was chosen.
+- A GPT-Live voice view uses `gpt-live-1` over browser WebRTC with the API key
+  held by the loopback server. Responses delegation can create, search, and
+  update tasks and explicitly dispatch ready work through the same coordinator.
+
 ### Changed
 
 - The Agents header says the one thing that matters — "1 needs you",
