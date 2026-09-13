@@ -135,64 +135,23 @@ export type WorkspaceState = {
   updatedAt?: string;
 };
 
-const now = "2026-09-12T09:30:00.000Z";
-
-export const seedWorkspace = (): WorkspaceState => ({
-  id: "spatialize",
-  name: "Spatialize",
-  description: "The operating map for your code, decisions, and delegated work.",
-  root: "C:/Users/DivijN/Spatialize",
-  sources: [
-    { id: "src-repo", label: "Spatialize repository", kind: "repository", path: "C:/Users/DivijN/Spatialize", status: "indexed", updatedAt: now },
-    { id: "foolscap-repo", label: "foolscap repository", kind: "repository", path: "C:/Users/DivijN/foolscap", status: "indexed", updatedAt: now },
-    { id: "architecture", label: "ARCHITECTURE.md", kind: "document", path: "C:/Users/DivijN/Spatialize/ARCHITECTURE.md", status: "indexed", updatedAt: now },
-    { id: "agent-history", label: "Agent session archive", kind: "session", path: "~/.foolscap/acp", status: "indexed", updatedAt: now },
-  ],
-  nodes: [
-    { id: "workspace", label: "Spatialize", kind: "workspace", detail: "Product workspace", x: 420, y: 190, sourceIds: ["src-repo", "architecture"] },
-    { id: "fleet", label: "Agent fleet", kind: "service", detail: "ACP session coordination", x: 180, y: 90, sourceIds: ["foolscap-repo"] },
-    { id: "knowledge", label: "Knowledge layer", kind: "service", detail: "Source and relationship index", x: 650, y: 90, sourceIds: ["architecture", "agent-history"] },
-    { id: "tasks", label: "Task state", kind: "module", detail: "Durable plan and attempts", x: 180, y: 300, sourceIds: ["foolscap-repo"] },
-    { id: "voice", label: "Voice control", kind: "module", detail: "GPT-Live conversation", x: 650, y: 300, sourceIds: ["architecture"] },
-    { id: "milestone", label: "Milestone 1", kind: "task", detail: "Workspace foundation", x: 420, y: 390, sourceIds: ["agent-history"] },
-  ],
-  edges: [
-    { from: "workspace", to: "fleet", label: "coordinates" },
-    { from: "workspace", to: "knowledge", label: "understands" },
-    { from: "workspace", to: "tasks", label: "tracks" },
-    { from: "workspace", to: "voice", label: "controls" },
-    { from: "tasks", to: "milestone", label: "contains" },
-    { from: "knowledge", to: "milestone", label: "informs" },
-    { from: "voice", to: "milestone", label: "updates" },
-  ],
-  tasks: [
-    { id: "task-context", title: "Index repository context", detail: "Build the first source map from code and architecture notes.", status: "done", priority: "P1", agent: "codex", model: "gpt-5.3-codex", sourceIds: ["src-repo", "architecture"], nodeIds: ["knowledge"], spentUsd: 1.24, budgetUsd: 3, progress: 100, updatedAt: now },
-    { id: "task-board", title: "Workspace foundation", detail: "Connect tasks, sources, agents, and graph entities in one surface.", status: "running", priority: "P0", agent: "claude code", model: "claude-sonnet", sourceIds: ["foolscap-repo", "agent-history"], nodeIds: ["tasks", "milestone"], spentUsd: 0.82, budgetUsd: 4, progress: 62, updatedAt: now },
-    { id: "task-review", title: "Review coordination contract", detail: "Check the runner boundary before adding hosted execution.", status: "review", priority: "P1", agent: "gemini", model: "gemini-2.5-pro", sourceIds: ["foolscap-repo"], nodeIds: ["fleet"], spentUsd: 0.44, budgetUsd: 2, progress: 85, updatedAt: now },
-    { id: "task-voice", title: "Voice handoff prototype", detail: "Route a spoken request to a bounded task plan.", status: "ready", priority: "P1", agent: "unassigned", model: "—", sourceIds: ["architecture"], nodeIds: ["voice"], spentUsd: 0, budgetUsd: 5, progress: 0, updatedAt: now },
-    { id: "task-cloud", title: "Hosted runner spike", detail: "Define tenant isolation and metering boundaries.", status: "backlog", priority: "P2", agent: "unassigned", model: "—", sourceIds: ["foolscap-repo"], nodeIds: ["fleet"], spentUsd: 0, budgetUsd: 8, progress: 0, updatedAt: now },
-  ],
+/**
+ * What the UI shows before the server answers. Deliberately empty: the
+ * workspace is server state, and a sample here would be shown to every
+ * first-time user as if it were theirs.
+ */
+export const emptyWorkspace = (): WorkspaceState => ({
+  id: "",
+  name: "",
+  description: "",
+  root: "",
+  sources: [],
+  nodes: [],
+  edges: [],
+  tasks: [],
+  decisions: [],
+  voiceSessions: [],
 });
-
-const STORAGE_KEY = "foolscap.workspace.v1";
-
-export function loadWorkspace(): WorkspaceState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as WorkspaceState;
-  } catch {
-    // Private browsing or an older schema falls back to a useful workspace.
-  }
-  return seedWorkspace();
-}
-
-export function saveWorkspace(state: WorkspaceState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // The UI remains usable when persistence is unavailable.
-  }
-}
 
 const API_HEADERS = { "content-type": "application/json", "x-foolscap": "workspace" };
 

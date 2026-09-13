@@ -15,6 +15,13 @@
   held by the loopback server. Responses delegation can create, search, and
   update tasks and explicitly dispatch ready work through the same coordinator.
 
+### Fixed
+
+- The workspace no longer ships a sample state — with the author's own
+  local paths and invented tasks — that every first-time user saw before
+  the server answered. The UI starts empty and shows what the server
+  has; nothing about the workspace is cached in the browser.
+
 ### Changed
 
 - The Agents header says the one thing that matters — "1 needs you",

@@ -65,7 +65,7 @@ export function defaultWorkspace(root = process.cwd()) {
     version: 3,
     id: idFor("workspace", absoluteRoot),
     name,
-    description: "The operating map for your code, decisions, and delegated work.",
+    description: "Tasks, and the agents that run them.",
     root: absoluteRoot,
     sources: [],
     nodes: [{

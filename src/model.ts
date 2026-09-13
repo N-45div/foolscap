@@ -317,7 +317,7 @@ export type SessionRef = {
 
 export type ProjectRef = { dir: string; sessions: SessionRef[] };
 
-/** `c--Users-DivijN-Spatialize` → best-effort `C:\Users\DivijN\Spatialize` */
+/** `c--Users-you-myproject` → best-effort `C:\Users\you\myproject` */
 export function prettyProjectName(dir: string): string {
   const m = /^([a-z])--(.+)$/i.exec(dir);
   if (!m) return dir;
