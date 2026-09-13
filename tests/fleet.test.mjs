@@ -148,7 +148,7 @@ test("the recording replays into the same document", async () => {
   const { s, dir } = await one();
   s.prompt("record me");
   await until(() => s.status === "done");
-  await new Promise((r) => setTimeout(r, 250)); // let appends flush
+  await s.recorder.queue; // every append has landed
 
   const files = (await readdir(dir)).filter((f) => f.endsWith(".jsonl"));
   assert.equal(files.length, 1);
