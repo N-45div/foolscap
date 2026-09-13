@@ -8,8 +8,7 @@ import { SOURCES, type SourceId } from "./sources";
 import { Notebook } from "./Notebook";
 import { Shelf } from "./Shelf";
 import { Fleet } from "./Fleet";
-import { Workspace, type WorkspaceMode } from "./workspace/Workspace";
-import { Voice } from "./voice/Voice";
+import { Workspace } from "./workspace/Workspace";
 
 type Group = { source: SourceId; dir: string; sessions: SessionRef[] };
 
@@ -57,15 +56,11 @@ function fmtWhen(ms: number): string {
 }
 
 type Selected = { ref: SessionRef; source: SourceId };
-type View = "workspace" | "board" | "knowledge" | "voice" | "usage" | "archive" | "shelf" | "fleet";
+type View = "work" | "archive" | "shelf" | "fleet";
 
-/** Plain-language names for the three views; the tooltip says what each is for. */
+/** Plain-language names for the four views; the tooltip says what each is for. */
 const VIEWS: Array<[View, string, string]> = [
-  ["workspace", "Workspace", "Your connected company and codebase command center"],
-  ["board", "Board", "Plan and move work across the execution lifecycle"],
-  ["knowledge", "Graph", "Explore connected sources, entities, and backlinks"],
-  ["voice", "Voice", "Talk to the workspace and delegate durable work"],
-  ["usage", "Usage", "See execution spend, budgets, and context coverage"],
+  ["work", "▸ Work", "Tell it what needs doing; it runs your agents and proves what came back"],
   ["archive", "History", "Every session your coding agents have run, readable as documents"],
   ["shelf", "☆ Prompts", "Every prompt you've ever sent, with which ones actually worked"],
   ["fleet", "⚡ Agents", "Run several agents at once and see which one needs you"],
@@ -79,6 +74,7 @@ const WELCOMED_KEY = "foolscap.welcomed";
  */
 function Welcome({ onPick, onClose }: { onPick: (v: View) => void; onClose: () => void }) {
   const cards: Array<[View, string, string, string]> = [
+    ["work", "Work", "Tell it what needs doing. foolscap briefs an agent, runs it on your machine, and proves what came back from the tests and diffs.", "Start work"],
     ["archive", "History", "Everything your agents have done, as documents you can read, search and share.", "Show my history"],
     ["shelf", "Prompts", "Every prompt you've ever sent — and which ones actually worked, from what happened next.", "See my prompts"],
     ["fleet", "Agents", "Run several agents at once. foolscap tells you which one needs you.", "Run agents"],
@@ -90,10 +86,10 @@ function Welcome({ onPick, onClose }: { onPick: (v: View) => void; onClose: () =
           Welcome to fools<span className="text-brass-bright">cap</span>.
         </p>
         <p className="mt-2 max-w-[60ch] text-sm leading-relaxed text-ink-2">
-          It reads what your coding agents already write to this machine — nothing is
-          uploaded anywhere — and turns it into three things:
+          It reads what your coding agents already write to this machine — your sessions
+          never leave it — and gives you four things:
         </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {cards.map(([id, name, blurb, cta]) => (
             <button
               key={id}
@@ -188,7 +184,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
-  const [view, setView] = useState<View>("workspace");
+  const [view, setView] = useState<View>("archive");
 
   // Coming back to the archive picks up sessions the fleet recorded
   // since the page loaded — a finished agent is in the archive at once.
@@ -374,7 +370,7 @@ export function App() {
         </nav>
 
         <footer className="border-t border-rule px-4 py-2">
-          <nav className="flex flex-wrap justify-between gap-x-3 gap-y-2" aria-label="View">
+          <nav className="flex justify-between gap-2" aria-label="View">
             {VIEWS.map(([id, label, tip]) => (
               <button
                 key={id}
@@ -404,13 +400,7 @@ export function App() {
             onClose={dismissHelp}
           />
         )}
-        {(view === "workspace" || view === "board" || view === "knowledge" || view === "usage") && (
-          <Workspace
-            mode={view as WorkspaceMode}
-            onOpenAgents={() => setView("fleet")}
-          />
-        )}
-        {view === "voice" && <Voice />}
+        {view === "work" && <Workspace onOpenAgents={() => setView("fleet")} />}
         {view === "fleet" && <Fleet />}
         {view === "shelf" && (
           <Shelf

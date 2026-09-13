@@ -28,6 +28,10 @@
 
 ### Changed
 
+- Four views again, not eight. Workspace, Board, Graph, Voice and Usage
+  are tabs inside one **▸ Work** entry; History, Prompts and Agents are
+  as before, and History is still where you land. The welcome overlay
+  explains Work in one card.
 - "auto" routing starts with native Claude Code — the driver verified on
   the real binary and the one that reports cost — then Codex and
   OpenCode by load. Devin (billed, cloud) and the unverified Warp and

@@ -19,9 +19,18 @@ import {
   type WorkspaceState,
   type WorkspaceTask,
 } from "./model";
+import { Voice } from "../voice/Voice";
 
-export type WorkspaceMode = "workspace" | "board" | "knowledge" | "usage";
-type Props = { mode: WorkspaceMode; onOpenAgents: () => void };
+/** The tabs inside Work. One footer entry outside, five plain words inside. */
+export type WorkspaceMode = "overview" | "board" | "graph" | "usage" | "voice";
+const MODES: Array<[WorkspaceMode, string, string]> = [
+  ["overview", "overview", "Where things stand, and what needs a decision"],
+  ["board", "board", "Tasks by state — drag to move, open to run"],
+  ["graph", "graph", "Files and links in the folders you connected"],
+  ["usage", "usage", "What each task cost and why it went to that agent"],
+  ["voice", "voice", "Say what needs doing (needs OPENAI_API_KEY)"],
+];
+type Props = { onOpenAgents: () => void };
 const STATUSES: TaskStatus[] = ["backlog", "ready", "running", "review", "blocked", "done"];
 const money = (value: number) => `$${value.toFixed(2)}`;
 
@@ -188,7 +197,8 @@ function Overview({ state, loaded, onInspect, onReindex }: { state: WorkspaceSta
   );
 }
 
-export function Workspace({ mode, onOpenAgents }: Props) {
+export function Workspace({ onOpenAgents }: Props) {
+  const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [state, setState] = useState<WorkspaceState>(() => emptyWorkspace());
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -232,16 +242,18 @@ export function Workspace({ mode, onOpenAgents }: Props) {
   return (
     <div className="flex min-h-full min-w-0 flex-col bg-paper">
       <header className="border-b border-rule bg-paper-raised px-5 py-4">
-        <div className="flex flex-wrap items-start gap-4"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${error ? "bg-oxide" : "bg-moss"}`} /><span className="instrument text-[9px]">workspace / local</span><span className="truncate font-mono text-[10px] text-ink-3">· {loaded ? state.root : "connecting…"}</span></div><h1 className="mt-2 font-mono text-xl font-bold tracking-tight">{state.name}<span className="ml-2 text-brass-bright">/ command center</span></h1><p className="mt-1 max-w-[70ch] text-xs text-ink-2">{state.description}</p></div><div className="flex flex-wrap items-center justify-end gap-2"><button type="button" disabled={!ready || dispatching} onClick={() => void dispatch()} title="Route ready tasks by budget and current fleet load" className="border border-moss px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-moss disabled:opacity-40">{dispatching ? "dispatching…" : `dispatch ready · ${ready}`}</button><button type="button" onClick={onOpenAgents} className="border border-rule-strong px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] hover:border-brass-bright">open agents</button><button type="button" onClick={() => { setSourcePath(state.root); setSourceOpen((value) => !value); }} className="border border-brass-bright bg-brass-wash px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-brass-bright">connect source</button></div></div>
+        <div className="flex flex-wrap items-start gap-4"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${error ? "bg-oxide" : "bg-moss"}`} /><span className="instrument text-[9px]">workspace / local</span><span className="truncate font-mono text-[10px] text-ink-3">· {loaded ? state.root : "connecting…"}</span></div><h1 className="mt-2 font-mono text-xl font-bold tracking-tight">{state.name || "Work"}<span className="ml-2 text-brass-bright">/ work</span></h1><p className="mt-1 max-w-[70ch] text-xs text-ink-2">{state.description}</p></div><div className="flex flex-wrap items-center justify-end gap-2"><button type="button" disabled={!ready || dispatching} onClick={() => void dispatch()} title="Route ready tasks by budget and current fleet load" className="border border-moss px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-moss disabled:opacity-40">{dispatching ? "dispatching…" : `dispatch ready · ${ready}`}</button><button type="button" onClick={onOpenAgents} className="border border-rule-strong px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] hover:border-brass-bright">open agents</button><button type="button" onClick={() => { setSourcePath(state.root); setSourceOpen((value) => !value); }} className="border border-brass-bright bg-brass-wash px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-brass-bright">connect source</button></div></div>
         {sourceOpen && <div className="mt-4 flex flex-wrap items-center gap-2 border border-rule bg-paper-sunk p-3"><span className="instrument text-[9px]">local folder</span><input value={sourcePath} onChange={(event) => setSourcePath(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connect(); }} placeholder="absolute path to a repository or notes folder" autoFocus className="min-w-[280px] flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-ink-3" /><button type="button" disabled={syncing} onClick={() => void connect()} className="border border-brass-bright px-3 py-1.5 font-mono text-[10px] text-brass-bright disabled:opacity-50">{syncing ? "indexing…" : "index"}</button></div>}
         {error && <p className="mt-3 font-mono text-[10px] text-oxide">{error}</p>}
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-rule pt-3 font-mono text-[10px] text-ink-3"><span><b className="text-ink">{state.sources.length}</b> sources indexed</span><span><b className="text-ink">{state.nodes.length}</b> entities mapped</span><span><b className="text-ink">{running}</b> active task{running === 1 ? "" : "s"}</span><span className={error ? "text-oxide" : "text-moss"}>{error ? "sync issue" : "sync healthy"}</span><div className="ml-auto flex items-center gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTask(); }} placeholder="capture a task…" aria-label="Capture a task" className="w-44 border-b border-rule-strong bg-transparent px-1 py-1 font-mono text-[10px] outline-none placeholder:text-ink-3 focus:border-brass-bright" /><button type="button" onClick={addTask} className="text-brass-bright hover:underline">+ add</button></div></div>
+        <nav className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-rule pt-3" aria-label="Work">{MODES.map(([id, label, tip]) => <button key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id} title={tip} className={`instrument transition-colors hover:text-brass-bright ${mode === id ? "text-brass-bright" : ""}`}>{label}</button>)}</nav>
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] text-ink-3"><span><b className="text-ink">{state.sources.length}</b> sources indexed</span><span><b className="text-ink">{state.nodes.length}</b> entities mapped</span><span><b className="text-ink">{running}</b> active task{running === 1 ? "" : "s"}</span><span className={error ? "text-oxide" : "text-moss"}>{error ? "sync issue" : "sync healthy"}</span><div className="ml-auto flex items-center gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTask(); }} placeholder="capture a task…" aria-label="Capture a task" className="w-44 border-b border-rule-strong bg-transparent px-1 py-1 font-mono text-[10px] outline-none placeholder:text-ink-3 focus:border-brass-bright" /><button type="button" onClick={addTask} className="text-brass-bright hover:underline">+ add</button></div></div>
       </header>
-      {mode === "workspace" && <Overview state={state} loaded={loaded} onInspect={setSelectedId} onReindex={(path) => void connect(path)} />}
+      {mode === "overview" && <Overview state={state} loaded={loaded} onInspect={setSelectedId} onReindex={(path) => void connect(path)} />}
       {mode === "board" && <Board state={state} agents={agents} busyTaskId={busyTaskId} onChange={commit} selectedId={selectedId} setSelectedId={setSelectedId} onRun={(id, agent) => void execute(id, agent)} onCancel={(id) => void cancel(id)} onOpenAgents={onOpenAgents} />}
-      {mode === "knowledge" && <Graph state={state} />}
+      {mode === "graph" && <Graph state={state} />}
       {mode === "usage" && <Usage state={state} />}
-      {selectedId && mode === "workspace" && <TaskInspector task={state.tasks.find((task) => task.id === selectedId) ?? null} state={state} agents={agents} busy={busyTaskId === selectedId} onRun={(agent) => void execute(selectedId, agent)} onCancel={() => void cancel(selectedId)} onOpenAgents={onOpenAgents} onClose={() => setSelectedId(null)} />}
+      {mode === "voice" && <Voice />}
+      {selectedId && mode === "overview" && <TaskInspector task={state.tasks.find((task) => task.id === selectedId) ?? null} state={state} agents={agents} busy={busyTaskId === selectedId} onRun={(agent) => void execute(selectedId, agent)} onCancel={() => void cancel(selectedId)} onOpenAgents={onOpenAgents} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }
