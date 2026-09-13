@@ -26,8 +26,13 @@ const MAX_SEARCH_BYTES_PER_FILE = 32 * 1024;
 const SEARCH_CACHE = new Map();
 const DEFAULT_ROUTING = {
   mode: "balanced",
-  defaultAgent: "codex",
-  fallbackAgents: ["claude-acp", "opencode"],
+  // Native Claude Code first: it's the one driver verified end to end on
+  // the real binary, and the only one that reports cost.
+  defaultAgent: "claude",
+  fallbackAgents: ["codex", "opencode"],
+  // "auto" only ever picks from these. Devin (cloud, billed) and the
+  // unverified drivers (Warp, Antigravity) run only when named.
+  autoAgents: ["claude", "codex", "opencode", "claude-acp"],
   maxConcurrent: 3,
   maxPerAgent: 2,
   budgetFloorUsd: 0.25,
@@ -364,16 +369,17 @@ export function chooseAgent(state, task, requested, snapshots, availableAgents) 
   if (explicit && !available.has(explicit)) throw new Error("requested agent is not available");
   const counts = new Map();
   for (const snapshot of active) counts.set(snapshot.agent, (counts.get(snapshot.agent) ?? 0) + 1);
+  const auto = new Set(routing.autoAgents ?? []);
   const candidates = explicit ? [explicit] : [
     task.agent,
     routing.defaultAgent,
     ...(routing.fallbackAgents ?? []),
-    ...available,
-  ].filter((agent, index, all) => agent && available.has(agent) && all.indexOf(agent) === index);
+    ...auto,
+  ].filter((agent, index, all) => agent && available.has(agent) && auto.has(agent) && all.indexOf(agent) === index);
   const agent = candidates
     .filter((candidate) => (counts.get(candidate) ?? 0) < routing.maxPerAgent)
     .sort((a, b) => (counts.get(a) ?? 0) - (counts.get(b) ?? 0))[0];
-  if (!agent) throw new Error(`every configured agent is at its per-agent limit (${routing.maxPerAgent})`);
+  if (!agent) throw new Error(explicit ? `${explicit} is at its per-agent limit (${routing.maxPerAgent})` : `every auto-routable agent is at its per-agent limit (${routing.maxPerAgent})`);
   const load = counts.get(agent) ?? 0;
   return {
     id: `decision-${randomUUID()}`,

@@ -250,8 +250,17 @@ test("the coordinator balances ready work across agent capacity", async () => {
   const dispatched = await response.json();
   assert.equal(dispatched.dispatch.launched, 2);
   assert.equal(dispatched.decisions.length, 2);
-  assert.deepEqual(new Set(dispatched.decisions.map((decision) => decision.agent)), new Set(["codex", "claude-acp"]));
+  // claude first, then the least-loaded fallback — never devin or warp on "auto"
+  assert.deepEqual(new Set(dispatched.decisions.map((decision) => decision.agent)), new Set(["claude", "codex"]));
   assert.ok(dispatched.tasks.every((task) => task.status === "running" && task.attempts.length === 1));
+});
+
+test("auto never routes to cloud or unverified agents unless named", () => {
+  const state = createTask(defaultWorkspace(process.cwd()), { title: "Route", budgetUsd: 3 });
+  const task = state.tasks[0];
+  assert.equal(chooseAgent(state, task, "auto", [], ["devin", "warp", "codex"]).agent, "codex");
+  assert.throws(() => chooseAgent(state, task, "auto", [], ["devin", "warp"]), /per-agent limit/);
+  assert.equal(chooseAgent(state, task, "devin", [], ["devin", "warp"]).agent, "devin");
 });
 
 test("routing refuses exhausted budgets before launching an agent", () => {

@@ -96,6 +96,7 @@ export type RoutingPolicy = {
   mode: "balanced";
   defaultAgent: string;
   fallbackAgents: string[];
+  autoAgents?: string[];
   maxConcurrent: number;
   maxPerAgent: number;
   budgetFloorUsd: number;

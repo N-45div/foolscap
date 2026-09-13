@@ -53,7 +53,9 @@ indexes up to 400 text/code files while skipping generated, dependency, and
 hidden directories. Open **Workspace**, add tasks on **Board**, inspect
 relationships in **Graph**, and review token/cost evidence and routing reasons
 under **Usage**. **Dispatch ready** fills available fleet capacity using the
-workspace's budget and load policy.
+workspace's budget and load policy. "auto" routes to Claude Code first,
+then Codex and OpenCode by load; Devin, Warp and Antigravity run only
+when you name them.
 
 **Voice** is the local BYOK path: set `OPENAI_API_KEY`, open the Voice view,
 and start a conversation. The browser connects to `gpt-live-1` over WebRTC

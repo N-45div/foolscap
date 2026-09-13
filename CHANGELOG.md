@@ -28,6 +28,10 @@
 
 ### Changed
 
+- "auto" routing starts with native Claude Code — the driver verified on
+  the real binary and the one that reports cost — then Codex and
+  OpenCode by load. Devin (billed, cloud) and the unverified Warp and
+  Antigravity drivers are never chosen automatically.
 - The Agents header says the one thing that matters — "1 needs you",
   "2 to review", or "4 running" — and never wraps.
 
