@@ -61,7 +61,7 @@ export class ClaudeStreamBuilder {
     this.activity = null;
     this.model = null;
     this.sessionId = null;
-    this.costUsd = 0;
+    this.costUsd = null; // set from `result.total_cost_usd`; null until then
     this.totalOutputTokens = 0;
   }
 

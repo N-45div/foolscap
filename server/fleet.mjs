@@ -324,7 +324,7 @@ export class AgentSession extends EventEmitter {
       evidence: this.evidence,
       model: this.builder.model ?? null,
       outputTokens: this.builder.totalOutputTokens ?? 0,
-      costUsd: this.builder.costUsd ?? 0,
+      costUsd: typeof this.builder.costUsd === "number" ? this.builder.costUsd : null,
       turns: this.turns,
       startedAt: this.startedAt,
       turnStartedAt: this.turnStartedAt,

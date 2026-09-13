@@ -17,6 +17,10 @@
 
 ### Fixed
 
+- Spend is honest. Only Claude Code reports cost; every other driver's
+  attempts now carry `costUsd: null` and the task is marked as spend
+  unknown ("≥ $0.00", "this agent doesn't report cost") instead of
+  showing $0.00 and letting the budget checks pass on nothing.
 - The workspace no longer ships a sample state — with the author's own
   local paths and invented tasks — that every first-time user saw before
   the server answered. The UI starts empty and shows what the server

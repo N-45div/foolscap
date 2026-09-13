@@ -280,6 +280,20 @@ export async function indexSource(state, path, label) {
   };
 }
 
+/**
+ * Spend is the sum of what agents *reported*. Claude Code reports cost
+ * natively; ACP agents, Devin and command agents do not, so their
+ * attempts carry `costUsd: null` and the task is marked `spentKnown:
+ * false` rather than pretending the work was free.
+ */
+export function spendOf(attempts = []) {
+  const reported = attempts.filter((attempt) => typeof attempt.costUsd === "number");
+  return {
+    spentUsd: reported.reduce((sum, attempt) => sum + attempt.costUsd, 0),
+    spentKnown: reported.length === attempts.length,
+  };
+}
+
 export function createTask(state, input) {
   const title = String(input?.title ?? "").trim();
   if (!title) throw new Error("task title is required");
@@ -295,6 +309,7 @@ export function createTask(state, input) {
     sourceIds: Array.isArray(input?.sourceIds) ? input.sourceIds : [],
     nodeIds: [],
     spentUsd: 0,
+    spentKnown: true,
     budgetUsd: Number.isFinite(input?.budgetUsd) ? Math.max(0, input.budgetUsd) : 3,
     progress: 0,
     attempts: [],
@@ -330,7 +345,7 @@ export function taskPrompt(state, task) {
     "",
     `Workspace root: ${state.root}`,
     `Priority: ${task.priority}`,
-    `Remaining task budget: $${remaining.toFixed(2)}`,
+    `Remaining task budget: $${remaining.toFixed(2)}${task.spentKnown === false ? " (earlier spend was not reported by the agent)" : ""}`,
     sourceLines.length ? `Connected sources:\n${sourceLines.join("\n")}` : "Connected sources: none",
     nodeLines.length ? `Relevant graph context:\n${nodeLines.join("\n")}` : "Relevant graph context: none attached",
     "",
@@ -365,7 +380,8 @@ export function chooseAgent(state, task, requested, snapshots, availableAgents) 
     taskId: task.id,
     agent,
     requested: explicit ?? "auto",
-    reason: explicit ? `explicit agent selection; ${load} active on ${agent}` : `balanced route; ${load} active on ${agent}; $${remaining.toFixed(2)} remaining`,
+    reason: (explicit ? `explicit agent selection; ${load} active on ${agent}` : `balanced route; ${load} active on ${agent}; $${remaining.toFixed(2)} remaining`) +
+      (task.spentKnown === false ? "; earlier spend not reported" : ""),
     remainingBudgetUsd: remaining,
     activeSessions: active.length,
     createdAt: new Date().toISOString(),
@@ -391,7 +407,7 @@ export function attachTaskAttempt(state, id, snapshot, decision) {
       stopReason: snapshot.stopReason ?? null,
       evidence: snapshot.evidence ?? { testsPassed: 0, testsFailed: 0, errors: 0, edited: 0 },
       outputTokens: snapshot.outputTokens ?? 0,
-      costUsd: snapshot.costUsd ?? 0,
+      costUsd: typeof snapshot.costUsd === "number" ? snapshot.costUsd : null,
       routeDecisionId: decision?.id ?? null,
       startedAt: snapshot.startedAt ?? now,
       updatedAt: now,
@@ -448,7 +464,7 @@ export function reconcileWorkspace(state, snapshots) {
       stopReason: snapshot.stopReason ?? current.stopReason,
       evidence,
       outputTokens: snapshot.outputTokens ?? current.outputTokens,
-      costUsd: snapshot.costUsd ?? current.costUsd ?? 0,
+      costUsd: typeof snapshot.costUsd === "number" ? snapshot.costUsd : current.costUsd ?? null,
       updatedAt: snapshot.lastActivityAt ?? now,
       endedAt: snapshot.doneAt ?? snapshot.endedAt ?? current.endedAt,
       error: snapshot.error ?? current.error,
@@ -472,7 +488,7 @@ export function reconcileWorkspace(state, snapshots) {
       progress,
       agent: snapshot.agent,
       model: snapshot.model ?? task.model,
-      spentUsd: nextAttempts.reduce((sum, attempt) => sum + Number(attempt.costUsd || 0), 0),
+      ...spendOf(nextAttempts),
       attempts: nextAttempts,
       updatedAt: now,
     };

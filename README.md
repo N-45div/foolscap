@@ -13,8 +13,11 @@ foolscap does four things, with its workspace state stored locally:
 
 - **The workspace — context to execution.** Connect repositories and notes,
   explore their file/import/link graph, capture work on a Kanban board, and
-  dispatch ready tasks to ACP agents under explicit budget and concurrency
-  limits. Every routing decision and execution attempt stays reviewable.
+  dispatch ready tasks to your agents under budget and concurrency
+  limits. Budgets count the cost agents *report*: Claude Code reports it
+  natively; ACP agents, Devin and Warp don't, and their spend shows as
+  "not reported" rather than as zero. Every routing decision and
+  execution attempt stays reviewable.
 - **The fleet — many agents, one queue.** Run Claude Code, Codex,
   OpenCode, Antigravity or Warp side by side, and Devin in the cloud. foolscap drives them, so it knows which one is
   blocked on you, whose tests just went red, and which to leave alone.

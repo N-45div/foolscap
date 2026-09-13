@@ -7,8 +7,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { handleWorkspaceApi } from "../server/workspace-api.mjs";
 import {
+  attachTaskAttempt,
   createTask,
   chooseAgent,
+  reconcileWorkspace,
   defaultWorkspace,
   indexSource,
   readWorkspace,
@@ -47,13 +49,14 @@ class FakeSession extends EventEmitter {
     this.error = null;
     this.evidence = { testsPassed: 0, testsFailed: 0, errors: 0, edited: 0 };
     this.outputTokens = 0;
+    this.costUsd = null;
   }
   snapshot() {
     return {
       id: this.id, agent: this.agent, agentLabel: "codex", driver: "acp", model: "gpt-test",
       cwd: this.cwd, name: this.name, status: this.status, startedAt: this.startedAt,
       lastActivityAt: this.lastActivityAt, doneAt: this.doneAt, error: this.error,
-      evidence: this.evidence, outputTokens: this.outputTokens,
+      evidence: this.evidence, outputTokens: this.outputTokens, costUsd: this.costUsd,
     };
   }
   prompt(text) { this.promptText = text; this.status = "working"; this.lastActivityAt = new Date().toISOString(); this.emit("change"); }
@@ -203,6 +206,23 @@ test("a workspace task launches through the fleet and records execution evidence
   assert.equal(finished.tasks[0].progress, 85);
   assert.equal(finished.tasks[0].attempts[0].outputTokens, 321);
   assert.equal(finished.tasks[0].attempts[0].evidence.testsPassed, 1);
+  // The fake agent never reported cost: unknown stays unknown, never zero.
+  assert.equal(finished.tasks[0].attempts[0].costUsd, null);
+  assert.equal(finished.tasks[0].spentKnown, false);
+  assert.equal(finished.tasks[0].spentUsd, 0);
+});
+
+test("reported cost becomes the task's spend; unreported cost marks it unknown", () => {
+  const base = createTask(defaultWorkspace(process.cwd()), { title: "Cost", budgetUsd: 5 });
+  const id = base.tasks[0].id;
+  const snap = (over) => ({ id: "s1", agent: "claude", agentLabel: "claude code", driver: "claude", model: "m", status: "working", startedAt: "t", evidence: { testsPassed: 0, testsFailed: 0, errors: 0, edited: 0 }, outputTokens: 10, ...over });
+  const attached = attachTaskAttempt(base, id, snap({ costUsd: null }), null);
+  const known = reconcileWorkspace(attached, [snap({ status: "done", costUsd: 0.42, doneAt: "t2" })]).state;
+  assert.equal(known.tasks[0].spentUsd, 0.42);
+  assert.equal(known.tasks[0].spentKnown, true);
+  const unknown = reconcileWorkspace(attached, [snap({ status: "done", costUsd: null, doneAt: "t2" })]).state;
+  assert.equal(unknown.tasks[0].spentUsd, 0);
+  assert.equal(unknown.tasks[0].spentKnown, false);
 });
 
 test("the coordinator balances ready work across agent capacity", async () => {

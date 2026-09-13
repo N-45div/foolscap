@@ -50,7 +50,7 @@ export type TaskAttempt = {
     edited: number;
   };
   outputTokens: number;
-  costUsd?: number;
+  costUsd?: number | null;
   routeDecisionId?: string | null;
   startedAt: string;
   updatedAt: string;
@@ -69,6 +69,8 @@ export type WorkspaceTask = {
   sourceIds: string[];
   nodeIds: string[];
   spentUsd: number;
+  /** false when an attempt's agent never reported cost — spend is then a lower bound, not zero */
+  spentKnown?: boolean;
   budgetUsd: number;
   progress: number;
   attempts?: TaskAttempt[];
@@ -217,6 +219,18 @@ export async function dispatchWorkspaceTasks(limit = 10): Promise<WorkspaceState
     headers: API_HEADERS,
     body: JSON.stringify({ limit }),
   })) as Promise<WorkspaceState & { dispatch?: { launched: number; errors: Array<{ taskId: string; error: string }> } }>;
+}
+
+const money = (value: number) => `$${value.toFixed(2)}`;
+
+/** "$0.31 / $3.00", or "≥ $0.31 / $3.00" with a note when some agent didn't report. */
+export function spendLabel(task: Pick<WorkspaceTask, "spentUsd" | "spentKnown" | "budgetUsd">): { text: string; note: string | null } {
+  const unknown = task.spentKnown === false;
+  const prefix = unknown && task.spentUsd > 0 ? "≥ " : "";
+  return {
+    text: `${prefix}${money(task.spentUsd)} / ${money(task.budgetUsd)}`,
+    note: unknown ? "this agent doesn't report cost" : null,
+  };
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
