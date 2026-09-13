@@ -66,7 +66,7 @@ test("the live broker keeps the key server-side and configures workspace delegat
   assert.equal(request.body.transport.sdp, "browser-offer");
   assert.deepEqual(
     request.body.session.delegation.responses.tools.map((tool) => tool.name),
-    ["workspace_create_task", "workspace_list_tasks", "workspace_search", "workspace_update_task", "workspace_dispatch_ready"],
+    ["workspace_create_task", "workspace_list_tasks", "workspace_search", "workspace_update_task", "workspace_dispatch_ready", "coordinator_run", "what_needs_me"],
   );
 });
 

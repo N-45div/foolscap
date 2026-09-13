@@ -7,6 +7,10 @@ type ToolCall = { call_id: string; name: string; arguments: string };
 type ActionRow = { id: string; name: string; state: "working" | "done" | "failed"; detail: string };
 
 const WORKSPACE_HEADERS = { "content-type": "application/json", "x-foolscap": "workspace" };
+const COORDINATOR_HEADERS = { "content-type": "application/json", "x-foolscap": "coordinator" };
+
+type FleetRow = { id: string; name: string; agentLabel: string; status: string; attention: { tier: number; reason: string }; pendingPermission?: { title?: string } | null };
+type RunRow = { id: string; goal: string; status: string; summary: string | null; question: { text: string } | null; updatedAt: string };
 
 async function value(response: Response) {
   const result = await response.json().catch(() => ({}));
@@ -82,6 +86,38 @@ async function workspaceTool(name: string, args: Record<string, unknown>, dispat
       body: JSON.stringify({ limit: args.limit }),
     })) as WorkspaceState & { dispatch?: { launched: number; errors: Array<{ taskId: string; error: string }> } };
     return { status: "dispatched", launched: state.dispatch?.launched ?? 0, errors: state.dispatch?.errors ?? [] };
+  }
+  if (name === "coordinator_run") {
+    if (!dispatchAuthorized) {
+      return { status: "confirmation_required", message: "Ask the user to explicitly say run, start, execute, begin, go, or dispatch before starting the coordinator." };
+    }
+    const run = await value(await fetch("/api/coordinator/runs", {
+      method: "POST",
+      headers: COORDINATOR_HEADERS,
+      body: JSON.stringify({ goal: args.goal, budgetUsd: args.budget_usd }),
+    })) as RunRow;
+    return { status: "started", run_id: run.id, state: run.status, note: "The coordinator is planning under Work. Questions it raises show up in what_needs_me." };
+  }
+  if (name === "what_needs_me") {
+    const [agents, runs] = await Promise.all([
+      value(await fetch("/api/fleet")) as Promise<FleetRow[]>,
+      value(await fetch("/api/coordinator/runs")) as Promise<{ runs: RunRow[] }>,
+    ]);
+    const items: Array<Record<string, unknown>> = [];
+    for (const run of runs.runs) {
+      if (run.status === "needs-you" && run.question) items.push({ kind: "question", from: "the coordinator", about: run.goal, question: run.question.text });
+    }
+    for (const row of agents) {
+      if (row.attention.tier === 0) items.push({ kind: "needs you", agent: row.name, who: row.agentLabel, why: row.attention.reason, permission: row.pendingPermission?.title ?? null });
+    }
+    for (const row of agents) {
+      if (row.attention.tier === 1) items.push({ kind: "review", agent: row.name, who: row.agentLabel, why: row.attention.reason });
+    }
+    const recent = Date.now() - 30 * 60 * 1000;
+    for (const run of runs.runs) {
+      if (run.status === "done" && run.summary && new Date(run.updatedAt).getTime() > recent) items.push({ kind: "finished", about: run.goal, report: run.summary.slice(0, 400) });
+    }
+    return { count: items.length, items, spoken: items.length ? `${items.length} thing${items.length === 1 ? "" : "s"} for you.` : "Nothing needs you right now." };
   }
   throw new Error(`unknown workspace tool: ${name}`);
 }
@@ -319,7 +355,7 @@ export function Voice() {
         </section>
 
         <div className="space-y-4">
-          <section className="border border-rule bg-paper-raised p-5"><p className="instrument text-[9px]">try saying</p><ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-2"><li>“Add a P1 task to fix the login timeout with a three dollar budget.”</li><li>“What work is blocked right now?”</li><li>“Search the codebase for the ACP permission flow.”</li><li>“Move that task to ready, then dispatch it.”</li></ul><p className="mt-4 border-t border-rule pt-3 font-mono text-[10px] text-ink-3">Agent execution requires an explicit run/start/execute/begin/dispatch phrase in the recent user transcript.</p></section>
+          <section className="border border-rule bg-paper-raised p-5"><p className="instrument text-[9px]">try saying</p><ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-2"><li>“Add a P1 task to fix the login timeout with a three dollar budget.”</li><li>“What work is blocked right now?”</li><li>“Search the codebase for the ACP permission flow.”</li><li>“Move that task to ready, then dispatch it.”</li><li>“Make the replay tests pass and have a second agent review it — go.”</li><li>“What needs me?”</li></ul><p className="mt-4 border-t border-rule pt-3 font-mono text-[10px] text-ink-3">Agent execution requires an explicit run/start/execute/begin/dispatch phrase in the recent user transcript.</p></section>
           <section className="border border-rule bg-paper-raised"><header className="flex items-center justify-between border-b border-rule px-4 py-3"><div><p className="instrument text-[9px]">delegation ledger</p><h2 className="mt-1 font-mono text-sm font-bold">Workspace actions</h2></div><span className="font-mono text-[10px] text-ink-3">{actions.length}</span></header><div className="max-h-[330px] divide-y divide-rule overflow-y-auto">{actions.map((action) => <div key={action.id} className="p-3"><div className="flex items-center gap-2"><span className={`h-1.5 w-1.5 rounded-full ${action.state === "done" ? "bg-moss" : action.state === "failed" ? "bg-oxide" : "animate-pulse bg-brass-bright"}`} /><span className="font-mono text-xs">{action.name}</span><span className="instrument ml-auto text-[9px]">{action.state}</span></div><p className="mt-2 line-clamp-3 break-all font-mono text-[9px] leading-relaxed text-ink-3">{action.detail}</p></div>)}{!actions.length && <p className="p-5 font-mono text-[10px] leading-relaxed text-ink-3">No backend actions yet. Conversation stays in GPT-Live until it needs workspace state or a durable operation.</p>}</div></section>
           {usage && <section className="border border-rule bg-paper-sunk p-4"><p className="instrument text-[9px]">final usage confirmed</p><pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[9px] text-ink-3">{JSON.stringify(usage, null, 2)}</pre></section>}
         </div>

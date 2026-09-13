@@ -71,7 +71,10 @@ through Foolscap's loopback session broker, so the project key never enters
 browser JavaScript. GPT-Live delegates workspace operations to a low-latency
 Responses backend (`gpt-5.6-luna` by default), which calls the same local
 task, search, and coordinator APIs as the visual interface. Override the
-backend with `FOOLSCAP_VOICE_BACKEND_MODEL`.
+backend with `FOOLSCAP_VOICE_BACKEND_MODEL`. Two of its tools reach the
+coordinator: say what needs doing and, once you've said *go*, it starts a
+run; ask *what needs me?* and it reads back the agent queue and any open
+coordinator question, most urgent first.
 
 ```sh
 OPENAI_API_KEY=your_project_key npx foolscap

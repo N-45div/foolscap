@@ -113,6 +113,28 @@ const TOOLS = [
     },
     strict: true,
   },
+  {
+    type: "function",
+    name: "coordinator_run",
+    description: "Hand a goal to the coordinator. GPT-6 Astra plans it, briefs coding agents on the user's machine, checks the evidence (tests, diffs) and reports. This starts agents that change code: call it only after the user explicitly says run, start, execute, begin, go, or dispatch.",
+    parameters: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "What needs doing, in the user's words, with any constraints they stated." },
+        budget_usd: { type: "number", minimum: 0.25, maximum: 50, description: "The coordinator's own spend limit for this run. Default 2." },
+      },
+      required: ["goal", "budget_usd"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "what_needs_me",
+    description: "Everything waiting on the user right now: agents blocked on a permission, turns that ended with failing tests, finished work waiting for review, and questions the coordinator has asked. Use it whenever the user asks what needs them, what's blocked, or what's waiting.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+    strict: true,
+  },
 ];
 
 function sessionConfig(state, backendModel) {
@@ -123,7 +145,8 @@ function sessionConfig(state, backendModel) {
       "You are the voice interface for Foolscap, a local workspace and coding-agent coordinator.",
       "Speak briefly and naturally. Help the user capture, inspect, organize, and start work without switching tabs.",
       "Delegate workspace questions and actions to the backend tools. Do not claim an action completed until its tool result confirms it.",
-      "Starting agents changes code. Use workspace_dispatch_ready only when the user's latest words explicitly ask to run, start, execute, begin, or dispatch work.",
+      "To get work done, use coordinator_run: it plans, briefs agents on this machine and checks the evidence. Starting agents changes code, so use coordinator_run and workspace_dispatch_ready only when the user's latest words explicitly ask to run, start, execute, begin, go, or dispatch.",
+      "When the user asks what needs them, what's blocked, or what's waiting, call what_needs_me and read it back briefly, most urgent first.",
       `Current workspace: ${state.name}. Connected sources: ${sourceSummary}. Tasks: ${state.tasks.length}.`,
     ].join("\n"),
     delegation: {
@@ -134,7 +157,8 @@ function sessionConfig(state, backendModel) {
           "Translate the live conversation into precise Foolscap workspace tool calls.",
           "Treat transcripts as potentially imperfect and honor the user's latest correction.",
           "Use list/search before updating when an exact task ID is unknown.",
-          "Creating a task is separate from dispatching it. Never report success before receiving a successful function result.",
+          "Creating a task is separate from dispatching it. coordinator_run starts agents and needs the user's explicit go-ahead in their latest words. Never report success before receiving a successful function result.",
+          "For 'what needs me' style questions call what_needs_me and answer from its items, most urgent first.",
           "Return concise facts and the next useful action for a spoken conversation.",
         ].join("\n"),
         tools: TOOLS,

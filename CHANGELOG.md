@@ -15,6 +15,8 @@
   "needs you". Runs are durable in the workspace file, metered against
   their own budget, and marked interrupted by a restart. Server-side
   under `/api/coordinator`, loopback-only with the usual header.
+- Voice can hand a goal to the coordinator ("…and go") and answer "what
+  needs me?" from the agent queue and any open coordinator question.
 - A persistent local workspace joins repositories, graph entities, Kanban
   tasks, agent attempts, and usage evidence in one interface.
 - Repository indexing builds source-backed file, import, and Markdown-link
