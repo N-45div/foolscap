@@ -87,6 +87,7 @@ export function defaultWorkspace(root = process.cwd()) {
     routing: { ...DEFAULT_ROUTING },
     decisions: [],
     voiceSessions: [],
+    runs: [],
     updatedAt: new Date().toISOString(),
   };
 }
@@ -105,6 +106,7 @@ export async function readWorkspace(file = workspaceFile(), root = process.cwd()
       routing: { ...DEFAULT_ROUTING, ...(value.routing ?? {}) },
       decisions: Array.isArray(value.decisions) ? value.decisions : [],
       voiceSessions: Array.isArray(value.voiceSessions) ? value.voiceSessions : [],
+      runs: Array.isArray(value.runs) ? value.runs : [],
     } : defaultWorkspace(root);
   } catch (err) {
     if (err?.code === "ENOENT" || err instanceof SyntaxError) return defaultWorkspace(root);
@@ -121,11 +123,34 @@ export async function writeWorkspace(state, file = workspaceFile()) {
     routing: { ...DEFAULT_ROUTING, ...(state.routing ?? {}) },
     decisions: Array.isArray(state.decisions) ? state.decisions.slice(0, 200) : [],
     voiceSessions: Array.isArray(state.voiceSessions) ? state.voiceSessions.slice(0, 100) : [],
+    // Coordinator runs: the newest 50, each with its last 400 events.
+    runs: Array.isArray(state.runs)
+      ? state.runs.slice(0, 50).map((run) => ({ ...run, events: Array.isArray(run.events) ? run.events.slice(-400) : [] }))
+      : [],
     updatedAt: new Date().toISOString(),
   };
   const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(temp, JSON.stringify(next, null, 2) + "\n", "utf8");
   await rename(temp, file);
+  return next;
+}
+
+/**
+ * Read → change → write, one at a time per process. The fleet's
+ * reconcile, the board's edits and the coordinator's run updates all
+ * touch the same file; serializing them is what keeps one from erasing
+ * another's change. `fn` may be async; returning the same object (or
+ * undefined) means "nothing to write".
+ */
+let queue = Promise.resolve();
+export function mutateWorkspace(file, root, fn) {
+  const next = queue.then(async () => {
+    const current = await readWorkspace(file, root);
+    const result = await fn(current);
+    if (result === undefined || result === current) return current;
+    return writeWorkspace(result, file);
+  });
+  queue = next.catch(() => {});
   return next;
 }
 

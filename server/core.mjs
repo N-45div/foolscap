@@ -18,6 +18,7 @@ import { judge, segmentsFor } from "./outcome.mjs";
 import { handleFleetApi } from "./fleet-api.mjs";
 import { handleLiveApi } from "./live-api.mjs";
 import { handleWorkspaceApi } from "./workspace-api.mjs";
+import { handleCoordinatorApi } from "./coordinator-api.mjs";
 import { acpArchiveDir } from "./acp.mjs";
 import {
   opencodeDataDir,
@@ -525,6 +526,7 @@ export async function handleApi(req, res, roots) {
     if (await handleFleetApi(req, res, url, fleetOpts)) return true;
     if (await handleLiveApi(req, res, url)) return true;
     if (await handleWorkspaceApi(req, res, url, { fleetOpts })) return true;
+    if (await handleCoordinatorApi(req, res, url, { fleetOpts })) return true;
 
     if (url.pathname === "/api/projects") {
       send(res, 200, "application/json", JSON.stringify(await scanAll(roots)));

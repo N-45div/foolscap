@@ -9,8 +9,15 @@ for every agent you're running.**
 
 ![Four agents in the fleet: one blocked on a permission, one with red tests, one waiting for review, one working](docs/fleet.png)
 
-foolscap does four things, with its workspace state stored locally:
+foolscap does five things, all on your machine:
 
+- **The coordinator — tell it what needs doing.** GPT-6 Astra plans the
+  work and routes it to your coding agents, which run here. Dispatch is
+  asynchronous, so it keeps planning while they work, and every result
+  comes back as *foolscap's* evidence — test runs, edited files, the
+  agent's last words — never the agent's claim. Repairs and reviews are
+  dispatched from that evidence; it asks you only when the answer
+  changes the work.
 - **The workspace — context to execution.** Connect repositories and notes,
   explore their file/import/link graph, capture work on a Kanban board, and
   dispatch ready tasks to your agents under budget and concurrency
@@ -188,6 +195,44 @@ foolscap acp --agent claude --cwd ~/myproject
 
 A token is required and generated per run (there is no open mode);
 loopback is the default and `--expose` warns loudly.
+
+## The coordinator — one conversation that runs your agents
+
+Open **▸ Work**, type what needs doing, press run. The coordinator is
+GPT-6 Astra over the Responses API, with seven tools, and it works like a
+careful lead: it searches the connected folders before it writes a brief,
+puts a task on the board, and dispatches it to an agent on your machine.
+
+Two of Astra's primitives are the whole design:
+
+- **Async tool calling.** `dispatch_task` is marked `async`, so Astra
+  issues it and keeps going — planning, dispatching an independent task,
+  or answering you. The result arrives later, by call id, and that result
+  is what foolscap observed: test commands and their output, files edited,
+  errors, the agent's final message, cost. The model reads evidence; it
+  is never asked whether the agent succeeded.
+- **The loop runs on evidence.** Red tests or errors: a repair is
+  dispatched on the same task with the failing output attached, at most
+  twice. Green tests with edited files: a review is dispatched to a
+  *different* agent, told to report problems and not fix them. It asks
+  you one question, and only when the answer changes the work; the run
+  shows **needs you** until you answer.
+
+Every run is durable — each event lands in `~/.foolscap/workspace.json`
+as it happens — and the feed under the composer shows the plan, each
+dispatch (with a link into Agents), each verdict, and the final report.
+A restart marks an in-flight run *interrupted* rather than losing it.
+
+```sh
+OPENAI_API_KEY=your_project_key npx foolscap
+```
+
+What leaves your machine: the goal, the brief, search snippets and the
+evidence summaries. Your session archives never do. The coordinator's own
+spend is metered per run from the published prices (default budget $2,
+`budgetUsd` on the run) and shown next to the run; the agents' spend is
+on the task. `FOOLSCAP_COORDINATOR_MODEL` picks another Responses model;
+`FOOLSCAP_OPENAI_BASE_URL` points at a compatible endpoint.
 
 ## Features
 

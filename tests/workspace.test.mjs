@@ -1,11 +1,11 @@
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { handleWorkspaceApi } from "../server/workspace-api.mjs";
+import { FakeFleet } from "./fake-fleet.mjs";
 import {
   attachTaskAttempt,
   createTask,
@@ -33,50 +33,6 @@ async function fixture() {
   await writeFile(join(root, "Guide.md"), "# Guide\n");
   await writeFile(join(root, "node_modules", "ignored", "junk.ts"), "export const junk = true;\n");
   return root;
-}
-
-class FakeSession extends EventEmitter {
-  constructor(id, input) {
-    super();
-    this.id = id;
-    this.agent = input.agent;
-    this.cwd = input.cwd;
-    this.name = input.name;
-    this.status = "idle";
-    this.startedAt = new Date().toISOString();
-    this.lastActivityAt = this.startedAt;
-    this.doneAt = null;
-    this.error = null;
-    this.evidence = { testsPassed: 0, testsFailed: 0, errors: 0, edited: 0 };
-    this.outputTokens = 0;
-    this.costUsd = null;
-  }
-  snapshot() {
-    return {
-      id: this.id, agent: this.agent, agentLabel: "codex", driver: "acp", model: "gpt-test",
-      cwd: this.cwd, name: this.name, status: this.status, startedAt: this.startedAt,
-      lastActivityAt: this.lastActivityAt, doneAt: this.doneAt, error: this.error,
-      evidence: this.evidence, outputTokens: this.outputTokens, costUsd: this.costUsd,
-    };
-  }
-  prompt(text) { this.promptText = text; this.status = "working"; this.lastActivityAt = new Date().toISOString(); this.emit("change"); }
-  finish() {
-    this.status = "done";
-    this.doneAt = new Date().toISOString();
-    this.lastActivityAt = this.doneAt;
-    this.outputTokens = 321;
-    this.evidence = { testsPassed: 1, testsFailed: 0, errors: 0, edited: 2 };
-    this.emit("change");
-  }
-  cancel() { this.status = "done"; this.doneAt = new Date().toISOString(); this.emit("change"); }
-  fail(message) { this.status = "error"; this.error = message; this.emit("change"); }
-}
-
-class FakeFleet {
-  constructor() { this.sessions = new Map(); this.counter = 0; }
-  launch(input) { const session = new FakeSession(`fleet-${++this.counter}`, input); this.sessions.set(session.id, session); return session.snapshot(); }
-  get(id) { return this.sessions.get(id) ?? null; }
-  list() { return [...this.sessions.values()].map((session) => session.snapshot()); }
 }
 
 test("repository indexing creates source-backed file nodes and relationships", async () => {

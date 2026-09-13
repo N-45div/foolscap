@@ -122,6 +122,48 @@ export type CoordinationDecision = {
   createdAt: string;
 };
 
+export type RunEvent = {
+  t: string;
+  kind: "message" | "task" | "call" | "result" | "dispatch" | "blocked" | "evidence" | "question" | "answer" | "retry" | "error" | "done" | "cancelled" | string;
+  text?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+  callId?: string;
+  async?: boolean;
+  summary?: string;
+  taskId?: string;
+  title?: string;
+  agent?: string;
+  sessionId?: string;
+  reason?: string;
+  testsPassed?: number;
+  testsFailed?: number;
+  errors?: number;
+  edited?: number;
+  attemptState?: string | null;
+  status?: number;
+  attempt?: number;
+};
+
+export type CoordinatorRun = {
+  id: string;
+  goal: string;
+  status: "planning" | "working" | "needs-you" | "done" | "failed" | "cancelled" | "interrupted";
+  model: string;
+  budgetUsd: number;
+  costUsd: number | null;
+  usage: { input: number; cached: number; output: number };
+  turns: number;
+  taskIds: string[];
+  question: { text: string; askedAt: string } | null;
+  summary: string | null;
+  error: string | null;
+  events: RunEvent[];
+  createdAt: string;
+  updatedAt: string;
+  endedAt: string | null;
+};
+
 export type WorkspaceState = {
   version?: number;
   id: string;
@@ -135,6 +177,7 @@ export type WorkspaceState = {
   routing?: RoutingPolicy;
   decisions?: CoordinationDecision[];
   voiceSessions?: VoiceSessionRecord[];
+  runs?: CoordinatorRun[];
   updatedAt?: string;
 };
 
@@ -232,6 +275,30 @@ export function spendLabel(task: Pick<WorkspaceTask, "spentUsd" | "spentKnown" |
     text: `${prefix}${money(task.spentUsd)} / ${money(task.budgetUsd)}`,
     note: unknown ? "this agent doesn't report cost" : null,
   };
+}
+
+const COORDINATOR_HEADERS = { "content-type": "application/json", "x-foolscap": "coordinator" };
+
+async function coordinatorResponse<T>(response: Response): Promise<T> {
+  const value = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(value?.error ?? `coordinator: ${response.status}`);
+  return value as T;
+}
+
+export function fetchRuns(): Promise<{ runs: CoordinatorRun[]; model: string; ready: boolean }> {
+  return fetch("/api/coordinator/runs").then((r) => coordinatorResponse(r));
+}
+
+export function startRun(goal: string, budgetUsd?: number): Promise<CoordinatorRun> {
+  return fetch("/api/coordinator/runs", { method: "POST", headers: COORDINATOR_HEADERS, body: JSON.stringify({ goal, budgetUsd }) }).then((r) => coordinatorResponse(r));
+}
+
+export function answerRun(id: string, answer: string): Promise<CoordinatorRun> {
+  return fetch(`/api/coordinator/runs/${encodeURIComponent(id)}/answer`, { method: "POST", headers: COORDINATOR_HEADERS, body: JSON.stringify({ answer }) }).then((r) => coordinatorResponse(r));
+}
+
+export function cancelRun(id: string): Promise<CoordinatorRun> {
+  return fetch(`/api/coordinator/runs/${encodeURIComponent(id)}/cancel`, { method: "POST", headers: COORDINATOR_HEADERS, body: "{}" }).then((r) => coordinatorResponse(r));
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {

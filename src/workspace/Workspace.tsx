@@ -20,6 +20,7 @@ import {
   type WorkspaceTask,
 } from "./model";
 import { Voice } from "../voice/Voice";
+import { Runs } from "./Runs";
 
 /** The tabs inside Work. One footer entry outside, five plain words inside. */
 export type WorkspaceMode = "overview" | "board" | "graph" | "usage" | "voice";
@@ -177,7 +178,7 @@ function Usage({ state }: { state: WorkspaceState }) {
   );
 }
 
-function Overview({ state, loaded, onInspect, onReindex }: { state: WorkspaceState; loaded: boolean; onInspect: (id: string) => void; onReindex: (path: string) => void }) {
+function Overview({ state, loaded, onInspect, onReindex, onOpenAgents, onRefresh }: { state: WorkspaceState; loaded: boolean; onInspect: (id: string) => void; onReindex: (path: string) => void; onOpenAgents: () => void; onRefresh: () => void }) {
   const attention = state.tasks.filter((task) => ["running", "review", "blocked", "ready"].includes(task.status));
   // Three honest steps, ticked from real state — no invented milestone.
   const steps: Array<[boolean, string, string]> = [
@@ -187,7 +188,7 @@ function Overview({ state, loaded, onInspect, onReindex }: { state: WorkspaceSta
   ];
   const done = steps.filter(([ok]) => ok).length;
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-6"><div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+    <div className="min-w-0 flex-1 overflow-y-auto p-6"><Runs onOpenAgents={onOpenAgents} onChanged={onRefresh} /><div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
       <section className="border border-rule bg-paper-raised p-5"><div className="flex items-start justify-between gap-3"><div><p className="instrument text-[9px]">getting started</p><h2 className="mt-1 font-mono text-base font-bold">{done === steps.length ? "Everything is connected" : "Three steps"}</h2></div><span className="tnum font-mono text-[10px] text-ink-3">{done} / {steps.length}</span></div>
         <ol className="mt-4 space-y-3">{steps.map(([ok, label, hint]) => <li key={label} className="flex gap-3"><span className={`mt-0.5 h-4 w-4 shrink-0 border text-center font-mono text-[10px] leading-4 ${ok ? "border-moss bg-moss-wash text-moss" : "border-rule-strong text-ink-3"}`}>{ok ? "✓" : ""}</span><div><span className={`font-mono text-xs ${ok ? "text-ink-3 line-through" : "text-ink"}`}>{label}</span><span className="mt-0.5 block text-[11px] leading-relaxed text-ink-3">{hint}</span></div></li>)}</ol>
         {!loaded && <p className="mt-4 font-mono text-[10px] text-ink-3">reading your workspace…</p>}
@@ -248,7 +249,7 @@ export function Workspace({ onOpenAgents }: Props) {
         <nav className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-rule pt-3" aria-label="Work">{MODES.map(([id, label, tip]) => <button key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id} title={tip} className={`instrument transition-colors hover:text-brass-bright ${mode === id ? "text-brass-bright" : ""}`}>{label}</button>)}</nav>
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] text-ink-3"><span><b className="text-ink">{state.sources.length}</b> sources indexed</span><span><b className="text-ink">{state.nodes.length}</b> entities mapped</span><span><b className="text-ink">{running}</b> active task{running === 1 ? "" : "s"}</span><span className={error ? "text-oxide" : "text-moss"}>{error ? "sync issue" : "sync healthy"}</span><div className="ml-auto flex items-center gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTask(); }} placeholder="capture a task…" aria-label="Capture a task" className="w-44 border-b border-rule-strong bg-transparent px-1 py-1 font-mono text-[10px] outline-none placeholder:text-ink-3 focus:border-brass-bright" /><button type="button" onClick={addTask} className="text-brass-bright hover:underline">+ add</button></div></div>
       </header>
-      {mode === "overview" && <Overview state={state} loaded={loaded} onInspect={setSelectedId} onReindex={(path) => void connect(path)} />}
+      {mode === "overview" && <Overview state={state} loaded={loaded} onInspect={setSelectedId} onReindex={(path) => void connect(path)} onOpenAgents={onOpenAgents} onRefresh={() => { fetchWorkspace().then(receive).catch(() => {}); }} />}
       {mode === "board" && <Board state={state} agents={agents} busyTaskId={busyTaskId} onChange={commit} selectedId={selectedId} setSelectedId={setSelectedId} onRun={(id, agent) => void execute(id, agent)} onCancel={(id) => void cancel(id)} onOpenAgents={onOpenAgents} />}
       {mode === "graph" && <Graph state={state} />}
       {mode === "usage" && <Usage state={state} />}

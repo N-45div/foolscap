@@ -4,6 +4,17 @@
 
 ### Added
 
+- **The coordinator.** Type what needs doing under ▸ Work; GPT-6 Astra
+  plans, searches the connected folders, puts tasks on the board and
+  dispatches them to your agents on this machine. `dispatch_task` is an
+  *async* tool: Astra keeps planning while agents work, and each result
+  comes back as foolscap's evidence — test runs and their output, edited
+  files, the agent's last message, cost — never the agent's own claim.
+  Red tests get a repair with the failure attached; green tests with
+  edits get a review on a different agent; a question parks the run as
+  "needs you". Runs are durable in the workspace file, metered against
+  their own budget, and marked interrupted by a restart. Server-side
+  under `/api/coordinator`, loopback-only with the usual header.
 - A persistent local workspace joins repositories, graph entities, Kanban
   tasks, agent attempts, and usage evidence in one interface.
 - Repository indexing builds source-backed file, import, and Markdown-link
