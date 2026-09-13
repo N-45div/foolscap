@@ -15,6 +15,10 @@
   "needs you". Runs are durable in the workspace file, metered against
   their own budget, and marked interrupted by a restart. Server-side
   under `/api/coordinator`, loopback-only with the usual header.
+- **A Linux installer.** `curl -fsSL …/install.sh | sh` picks up your
+  Node (22+) or keeps a private one, downloads the checksummed release
+  bundle from GitHub Releases, and writes `~/.local/bin/foolscap`.
+  Releases now carry that bundle next to the npm package.
 - Voice can hand a goal to the coordinator ("…and go") and answer "what
   needs me?" from the agent queue and any open coordinator question.
 - A persistent local workspace joins repositories, graph entities, Kanban
@@ -41,6 +45,9 @@
 
 ### Changed
 
+- The npm package only depends on `ws` at run time; React, marked and
+  DOMPurify are build-time (the viewer ships prebuilt in `dist/`), so
+  `npx foolscap` and the Linux bundle install less.
 - Four views again, not eight. Workspace, Board, Graph, Voice and Usage
   are tabs inside one **▸ Work** entry; History, Prompts and Agents are
   as before, and History is still where you land. The welcome overlay

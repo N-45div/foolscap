@@ -7,6 +7,7 @@
  * sessions, and binding anything else would expose them to the network.
  *
  *   foolscap                 open the viewer on your archive
+ *                            (OPENAI_API_KEY unlocks the coordinator + voice)
  *   foolscap skill           install the Claude Code skill
  *   foolscap --root <dir>    view a curated/copied archive
  *   foolscap --port <n>      pick a port (default 4517)

@@ -51,3 +51,40 @@ jobs:
           echo "publishing $PKG"
 
       - run: npm publish
+
+  # The Linux bundle: the published package plus its runtime dependencies,
+  # so install.sh needs no npm. Attached to a GitHub Release with a
+  # checksum; the release page's download counts are public.
+  bundle:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload assets
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Build the bundle
+        run: |
+          set -eu
+          VERSION=$(node -p "require('./package.json').version")
+          [ "v$VERSION" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != package.json $VERSION"; exit 1; }
+          npm pack --pack-destination /tmp
+          mkdir -p /tmp/bundle
+          tar -xzf "/tmp/foolscap-$VERSION.tgz" -C /tmp/bundle --strip-components=1
+          (cd /tmp/bundle && npm install --omit=dev --ignore-scripts --no-audit --no-fund)
+          mkdir -p /tmp/out
+          tar -czf "/tmp/out/foolscap-$VERSION-linux.tar.gz" -C /tmp/bundle .
+          cp "/tmp/out/foolscap-$VERSION-linux.tar.gz" /tmp/out/foolscap-linux.tar.gz
+          (cd /tmp/out && sha256sum "foolscap-$VERSION-linux.tar.gz" > "foolscap-$VERSION-linux.tar.gz.sha256" && sha256sum foolscap-linux.tar.gz > foolscap-linux.tar.gz.sha256)
+          ls -la /tmp/out
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/out/*
+          generate_release_notes: true

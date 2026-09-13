@@ -80,6 +80,25 @@ coordinator question, most urgent first.
 OPENAI_API_KEY=your_project_key npx foolscap
 ```
 
+## Install
+
+Linux, no root, no npm — one line:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/N-45div/foolscap/main/install.sh | sh
+```
+
+It uses your Node if it's 22 or newer, otherwise keeps a private copy
+under `~/.foolscap/node`; the release bundle is checksummed and unpacked
+to `~/.foolscap/app`; `foolscap` lands in `~/.local/bin`. `foolscap
+update` re-runs it. Read the script first if you like — it's short.
+
+Everywhere else, and on Linux if you'd rather:
+
+```sh
+npx foolscap
+```
+
 ## Supported harnesses
 
 foolscap is **harness-agnostic by design**: every harness is one adapter
