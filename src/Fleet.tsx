@@ -130,7 +130,7 @@ export function Fleet() {
   const [selected, setSelected] = useState<string | null>(null);
   const [seen, setSeen] = useState<Set<string>>(() => new Set());
   const [doc, setDoc] = useState<SessionDoc | null>(null);
-  const [agents, setAgents] = useState<Array<{ id: string; label: string }>>([]);
+  const [agents, setAgents] = useState<Array<{ id: string; label: string; available?: boolean; status?: string; reason?: string | null }>>([]);
   const [launch, setLaunch] = useState({ agent: "claude", cwd: "", name: "" });
   const [draft, setDraft] = useState("");
   const [answer, setAnswer] = useState("");
@@ -331,9 +331,9 @@ export function Fleet() {
             onChange={(e) => setLaunch({ ...launch, agent: e.target.value })}
             className="min-w-0 border border-rule bg-paper px-1.5 py-0.5 font-mono text-xs"
           >
-            {(agents.length ? agents : [{ id: "claude", label: "claude code" }]).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label}
+            {(agents.length ? agents : [{ id: "claude", label: "claude code", available: true }]).map((a) => (
+              <option key={a.id} value={a.id} disabled={a.available === false}>
+                {a.label}{a.available === false ? ` · ${a.reason ?? "setup needed"}` : a.status === "unverified" ? " · unverified" : ""}
               </option>
             ))}
           </select>

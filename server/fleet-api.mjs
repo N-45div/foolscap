@@ -11,7 +11,7 @@
  * never answer).
  */
 import { rank } from "./attention.mjs";
-import { FLEET_AGENTS, getFleet } from "./fleet.mjs";
+import { getFleet } from "./fleet.mjs";
 
 function sameOrigin(req) {
   const origin = req.headers.origin;
@@ -96,11 +96,7 @@ export async function handleFleetApi(req, res, url, fleetOpts) {
     return true;
   }
   if (rest === "/agents") {
-    json(
-      res,
-      200,
-      Object.entries(FLEET_AGENTS).map(([id, a]) => ({ id, label: a.label, driver: a.driver })),
-    );
+    json(res, 200, fleet.agents());
     return true;
   }
   if (rest === "/events") {

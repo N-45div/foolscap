@@ -106,7 +106,10 @@ export async function launchWorkspaceTask({ taskId, requestedAgent = "auto", cwd
       if (occupant) throw new Error(`workspace is busy with ${occupant.name || occupant.agent || "another agent"}`);
 
       const excluded = new Set(excludedAgents);
-      const availableAgents = Object.keys(FLEET_AGENTS).filter((agent) => !excluded.has(agent));
+      const detected = typeof fleet.agents === "function"
+        ? fleet.agents().filter((agent) => agent.available).map((agent) => agent.id)
+        : Object.keys(FLEET_AGENTS);
+      const availableAgents = detected.filter((agent) => !excluded.has(agent));
       const decision = chooseAgent(state, task, requestedAgent, snapshots, availableAgents);
       const snapshot = fleet.launch({
         agent: decision.agent,

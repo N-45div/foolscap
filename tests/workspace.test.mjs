@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { handleWorkspaceApi } from "../server/workspace-api.mjs";
+import { handleWorkspaceApi, synchronizedState } from "../server/workspace-api.mjs";
 import { FakeFleet } from "./fake-fleet.mjs";
 import {
   attachTaskAttempt,
@@ -166,6 +166,49 @@ test("a workspace task launches through the fleet and records execution evidence
   assert.equal(finished.tasks[0].attempts[0].costUsd, null);
   assert.equal(finished.tasks[0].spentKnown, false);
   assert.equal(finished.tasks[0].spentUsd, 0);
+});
+
+test("agent crashes and server restarts become durable blocked attempts", async () => {
+  const root = await fixture();
+  const dir = await mkdtemp(join(tmpdir(), "foolscap-workspace-recovery-"));
+  const file = join(dir, "workspace.json");
+  const fleet = new FakeFleet();
+  const initial = createTask(defaultWorkspace(root), { title: "Recover me", budgetUsd: 3 });
+  await writeWorkspace(initial, file);
+  const taskId = initial.tasks[0].id;
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    await handleWorkspaceApi(req, res, url, { file, root, fleet });
+  });
+  servers.push(server);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  await fetch(`${base}/api/workspace/tasks/${encodeURIComponent(taskId)}/run`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-foolscap": "workspace" },
+    body: JSON.stringify({ agent: "codex" }),
+  });
+  fleet.get("fleet-1").fail("agent process crashed");
+  const crashed = await (await fetch(`${base}/api/workspace`)).json();
+  assert.equal(crashed.tasks[0].status, "blocked");
+  assert.equal(crashed.tasks[0].attempts[0].status, "error");
+  assert.match(crashed.tasks[0].attempts[0].error, /crashed/);
+
+  // Simulate a persisted in-flight attempt loaded by a new process whose
+  // fleet has no corresponding child process.
+  const active = {
+    ...crashed,
+    tasks: crashed.tasks.map((task) => ({
+      ...task,
+      status: "running",
+      attempts: task.attempts.map((attempt) => ({ ...attempt, status: "working", error: null, endedAt: null })),
+    })),
+  };
+  await writeWorkspace(active, file);
+  const restartedFleet = new FakeFleet();
+  const recovered = await synchronizedState(file, root, restartedFleet);
+  assert.equal(recovered.tasks[0].status, "blocked");
+  assert.match(recovered.tasks[0].attempts[0].error, /no longer active/);
 });
 
 test("reported cost becomes the task's spend; unreported cost marks it unknown", () => {

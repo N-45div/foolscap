@@ -43,6 +43,18 @@ export const PRICES = {
   "gpt-5.6-luna": { input: 0.2, cachedInput: 0.02, output: 1.2 },
 };
 
+export const DEFAULT_MODELS = ["gpt-6-astra", "gpt-5.6-luna"];
+
+function configuredModels(primary, value) {
+  const listed = Array.isArray(value) ? value : String(value ?? "").split(",");
+  return [primary, ...listed, ...DEFAULT_MODELS]
+    .map((model) => String(model ?? "").trim())
+    .filter((model, index, all) => model && all.indexOf(model) === index);
+}
+
+const modelUnavailable = (status, message) =>
+  [400, 403, 404].includes(status) && /(model|access|available|permission|exist|found)/i.test(message);
+
 /** Cost of one response, or null when the model's price isn't known. */
 export function costOf(model, usage = {}) {
   const price = PRICES[model];
@@ -272,7 +284,8 @@ class CoordinatorRun {
   // ── The model ───────────────────────────────────────────────────────
 
   async request(input, previous) {
-    const { apiKey, baseUrl, model, fetchImpl, retryDelayMs, effort, agents } = this.ctx;
+    const { apiKey, baseUrl, fetchImpl, retryDelayMs, effort, agents } = this.ctx;
+    let model = this.run.model;
     const state = await readWorkspace(this.ctx.file, this.ctx.root);
     const body = {
       model,
@@ -282,6 +295,7 @@ class CoordinatorRun {
       tool_choice: "auto",
       store: true,
       reasoning: { effort },
+      max_output_tokens: this.ctx.maxOutputTokens,
       ...(previous ? { previous_response_id: previous } : {}),
     };
     for (let attempt = 0; ; attempt++) {
@@ -303,6 +317,19 @@ class CoordinatorRun {
         this.event("retry", { status: res.status, attempt: attempt + 1 });
         await sleep(after > 0 ? after * 1000 : retryDelayMs * (attempt + 1));
         continue;
+      }
+      if (!previous && this.run.turns === 0 && modelUnavailable(res.status, message)) {
+        const fallback = this.ctx.models[this.ctx.models.indexOf(model) + 1];
+        if (fallback) {
+          const from = model;
+          model = fallback;
+          this.run.model = fallback;
+          this.run.costUsd = PRICES[fallback] ? 0 : null;
+          body.model = fallback;
+          this.event("model-fallback", { from, model: fallback, status: res.status, text: message });
+          attempt = -1;
+          continue;
+        }
       }
       throw new Error(`${model}: HTTP ${res.status}${message ? ` — ${message}` : ""}`);
     }
@@ -674,33 +701,38 @@ class CoordinatorRun {
 
 /** One coordinator per process: holds the live runs; the file holds all of them. */
 export function createCoordinator(options = {}) {
+  const primaryModel = options.model ?? process.env.FOOLSCAP_COORDINATOR_MODEL ?? DEFAULT_MODEL;
   const ctx = {
     file: options.file,
     root: options.root ?? process.cwd(),
     fleet: options.fleet,
     apiKey: options.apiKey,
     baseUrl: (options.baseUrl ?? process.env.FOOLSCAP_OPENAI_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/$/, ""),
-    model: options.model ?? process.env.FOOLSCAP_COORDINATOR_MODEL ?? DEFAULT_MODEL,
+    model: primaryModel,
+    models: configuredModels(primaryModel, options.models ?? process.env.FOOLSCAP_COORDINATOR_MODELS),
     fetchImpl: options.fetchImpl ?? fetch,
     retryDelayMs: options.retryDelayMs ?? 1500,
     effort: options.effort ?? "medium",
+    maxOutputTokens: Number.isFinite(options.maxOutputTokens) ? Math.max(256, Math.min(8_000, options.maxOutputTokens)) : 1_200,
     agents: Object.entries(FLEET_AGENTS).map(([id, entry]) => ({ id, label: entry.label })),
   };
   const active = new Map();
 
   return {
     ctx,
-    async start({ goal, budgetUsd, fleetUrl }) {
+    async start({ goal, budgetUsd, fleetUrl, model }) {
       const text = String(goal ?? "").trim();
       if (!text) throw new Error("say what needs doing");
       if (!ctx.apiKey) throw new Error("Set OPENAI_API_KEY to use the coordinator");
+      const selectedModel = model ? String(model) : ctx.model;
+      if (!ctx.models.includes(selectedModel)) throw new Error("selected coordinator model is not configured");
       const run = {
         id: `run-${randomUUID()}`,
         goal: text,
         status: "planning",
-        model: ctx.model,
+        model: selectedModel,
         budgetUsd: Number.isFinite(budgetUsd) ? Math.min(50, Math.max(0.25, budgetUsd)) : 2,
-        costUsd: PRICES[ctx.model] ? 0 : null,
+        costUsd: PRICES[selectedModel] ? 0 : null,
         usage: { input: 0, cached: 0, output: 0 },
         turns: 0,
         lastResponseId: null,

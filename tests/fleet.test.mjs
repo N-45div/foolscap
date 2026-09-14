@@ -10,12 +10,22 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Fleet } from "../server/fleet.mjs";
+import { Fleet, fleetAgentCatalog } from "../server/fleet.mjs";
 import { attention } from "../server/attention.mjs";
 import { TranscriptBuilder } from "../server/acp-doc.mjs";
 
 const AGENT = `node ${join(import.meta.dirname, "fake-acp-agent.mjs")}`;
 const fleets = [];
+
+test("agent readiness reports missing local commands and cloud keys", () => {
+  const missing = fleetAgentCatalog({ PATH: "", PATHEXT: ".EXE;.CMD" });
+  assert.equal(missing.find((agent) => agent.id === "claude").available, false);
+  assert.match(missing.find((agent) => agent.id === "claude").reason, /missing command/);
+  assert.equal(missing.find((agent) => agent.id === "devin").available, false);
+  assert.match(missing.find((agent) => agent.id === "devin").reason, /DEVIN_API_KEY/);
+  const keyed = fleetAgentCatalog({ PATH: "", PATHEXT: ".EXE;.CMD", DEVIN_API_KEY: "configured" });
+  assert.equal(keyed.find((agent) => agent.id === "devin").available, true);
+});
 
 after(async () => {
   for (const f of fleets) await f.closeAll();

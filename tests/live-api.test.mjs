@@ -22,6 +22,9 @@ async function serve(options) {
 test("GPT-Live session creation requires a server-side project key", async () => {
   const root = await mkdtemp(join(tmpdir(), "foolscap-live-no-key-"));
   const base = await serve({ apiKey: "", file: join(root, "workspace.json"), root });
+  const status = await (await fetch(`${base}/api/live/status`)).json();
+  assert.equal(status.ready, false);
+  assert.equal(status.liveModel, "gpt-live-1");
   const response = await fetch(`${base}/api/live/session`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-foolscap": "live" },
@@ -44,6 +47,7 @@ test("the live broker keeps the key server-side and configures workspace delegat
   const base = await serve({
     apiKey: "server-secret",
     backendModel: "gpt-5.6-luna",
+    backendModels: ["gpt-5.6-terra"],
     fetchImpl,
     file: join(root, "workspace.json"),
     root,
@@ -51,18 +55,18 @@ test("the live broker keeps the key server-side and configures workspace delegat
   const response = await fetch(`${base}/api/live/session`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-foolscap": "live" },
-    body: JSON.stringify({ sdp: "browser-offer" }),
+    body: JSON.stringify({ sdp: "browser-offer", backendModel: "gpt-5.6-terra" }),
   });
   assert.equal(response.status, 201);
   const created = await response.json();
   assert.equal(created.transport.sdp, "answer");
-  assert.equal(created.foolscap.backendModel, "gpt-5.6-luna");
+  assert.equal(created.foolscap.backendModel, "gpt-5.6-terra");
   assert.equal(request.url, "https://api.openai.com/v1/live/sessions");
   assert.equal(request.init.headers.authorization, "Bearer server-secret");
   assert.equal(request.init.headers["openai-safety-identifier"].length, 64);
   assert.equal(request.body.session.model, "gpt-live-1");
   assert.equal(request.body.session.delegation.type, "responses");
-  assert.equal(request.body.session.delegation.responses.model, "gpt-5.6-luna");
+  assert.equal(request.body.session.delegation.responses.model, "gpt-5.6-terra");
   assert.equal(request.body.transport.sdp, "browser-offer");
   assert.deepEqual(
     request.body.session.delegation.responses.tools.map((tool) => tool.name),

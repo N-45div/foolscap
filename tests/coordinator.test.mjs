@@ -234,6 +234,27 @@ test("a 429 is retried with the server's delay; a 400 fails the run with the mes
   assert.match(saved.error, /HTTP 400 — bad request from test/);
 });
 
+test("model choice is bounded and the first request falls back when access is unavailable", async () => {
+  const script = (body, index) => {
+    assert.equal(body.max_output_tokens, 1200);
+    if (index === 0) {
+      assert.equal(body.model, "gpt-6-astra");
+      return { status: 404, message: "model is not available to this project" };
+    }
+    assert.equal(body.model, "gpt-5.6-luna");
+    return { output: [message("Fallback completed the planning request.")] };
+  };
+  const { coordinator, file, dir, api } = await setup(script);
+  await assert.rejects(() => coordinator.start({ goal: "x", model: "not-configured" }), /not configured/);
+  const run = await coordinator.start({ goal: "use an available model" });
+  await coordinator.settled(run.id);
+  const saved = (await readWorkspace(file, dir)).runs.find((item) => item.id === run.id);
+  assert.equal(saved.status, "done");
+  assert.equal(saved.model, "gpt-5.6-luna");
+  assert.equal(api.requests.length, 2);
+  assert.ok(saved.events.some((event) => event.kind === "model-fallback" && event.from === "gpt-6-astra"));
+});
+
 test("the run stops when its own budget is spent", async () => {
   const script = () => ({ output: [call("list_tasks", { status: null })], usage: { input_tokens: 100_000, input_tokens_details: { cached_tokens: 0 }, output_tokens: 10_000 } });
   const { coordinator, file, dir } = await setup(script);
@@ -287,6 +308,8 @@ test("the API refuses unmarked posts, reports readiness, and serves runs from th
   assert.equal(noKey.status, 503);
   const list = await (await fetch(`${base}/api/coordinator/runs`)).json();
   assert.equal(list.ready, false);
+  assert.deepEqual(list.models, ["gpt-6-astra", "gpt-5.6-luna"]);
+  assert.deepEqual(list.budget, { enforcement: "observed", hardCap: false, maxOutputTokens: 1200 });
   assert.deepEqual(list.runs, []);
 
   // A run left "working" by a previous process is marked interrupted on the next listing.

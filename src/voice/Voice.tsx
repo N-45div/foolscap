@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkspaceState } from "../workspace/model";
 
 type ConnectionState = "idle" | "connecting" | "live" | "closing";
@@ -131,6 +131,7 @@ export function Voice() {
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [backendModel, setBackendModel] = useState("gpt-5.6-luna");
+  const [liveStatus, setLiveStatus] = useState<{ ready: boolean; liveModel: string; backendModel: string; backendModels: string[] } | null>(null);
   const [transcript, setTranscript] = useState<TranscriptRow[]>([]);
   const [actions, setActions] = useState<ActionRow[]>([]);
   const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
@@ -146,6 +147,17 @@ export function Voice() {
   const sessionIdRef = useRef<string | null>(null);
   const backendModelRef = useRef("gpt-5.6-luna");
   const finalizedRef = useRef(false);
+
+  useEffect(() => {
+    fetch("/api/live/status").then(value)
+      .then((next) => {
+        const info = next as { ready: boolean; liveModel: string; backendModel: string; backendModels: string[] };
+        setLiveStatus(info);
+        setBackendModel(info.backendModel);
+        backendModelRef.current = info.backendModel;
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
+  }, []);
 
   const teardown = (next: ConnectionState = "idle") => {
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
@@ -314,7 +326,7 @@ export function Voice() {
       const result = await value(await fetch("/api/live/session", {
         method: "POST",
         headers: { "content-type": "application/json", "x-foolscap": "live" },
-        body: JSON.stringify({ sdp }),
+        body: JSON.stringify({ sdp, backendModel }),
       }));
       const selectedBackend = String(result.foolscap?.backendModel ?? "gpt-5.6-luna");
       backendModelRef.current = selectedBackend;
@@ -346,7 +358,11 @@ export function Voice() {
           <div className="flex flex-wrap items-start gap-4"><div className="min-w-0 flex-1"><p className="instrument text-[9px] text-[#81909a]">voice command channel</p><h1 className="mt-2 font-mono text-2xl font-bold">Tell Foolscap what needs doing.</h1><p className="mt-2 max-w-[60ch] text-sm leading-relaxed text-[#9ca8af]">GPT-Live keeps the conversation natural. Workspace tools create durable tasks, search context, move cards, and dispatch agents through the same budget policy as the board.</p></div><span className={`rounded-full border px-3 py-1 font-mono text-[10px] uppercase ${status === "live" ? "border-[#6fbf97] text-[#6fbf97]" : "border-[#39464e] text-[#87949c]"}`}>{status}</span></div>
 
           <div className="my-8 flex h-24 items-center justify-center gap-2" aria-hidden="true">{Array.from({ length: 17 }, (_, index) => <span key={index} className={`w-1 bg-[#d6a05c] ${status === "live" ? "animate-pulse" : ""}`} style={{ height: status === "live" ? `${24 + (index % 5) * 10}px` : "8px", animationDelay: `${index * 55}ms` }} />)}</div>
-          <div className="flex justify-center gap-3">{status === "idle" ? <button type="button" onClick={() => void start()} className="border border-[#d6a05c] bg-[#2a2118] px-5 py-3 font-mono text-xs uppercase tracking-[0.15em] text-[#e3b173]">start conversation</button> : <button type="button" disabled={status !== "live"} onClick={stop} className="border border-[#bf6c5d] px-5 py-3 font-mono text-xs uppercase tracking-[0.15em] text-[#d88777] disabled:opacity-50">{status === "closing" ? "finishing…" : "end conversation"}</button>}</div>
+          <div className="flex flex-wrap justify-center gap-3">
+            {status === "idle" && <select value={backendModel} onChange={(event) => { setBackendModel(event.target.value); backendModelRef.current = event.target.value; }} aria-label="Voice delegation model" className="border border-[#39464e] bg-[#0b1014] px-3 py-2 font-mono text-[10px] text-[#9ca8af]">{(liveStatus?.backendModels ?? [backendModel]).map((model) => <option key={model} value={model}>{model}</option>)}</select>}
+            {status === "idle" ? <button type="button" disabled={liveStatus?.ready === false} onClick={() => void start()} className="border border-[#d6a05c] bg-[#2a2118] px-5 py-3 font-mono text-xs uppercase tracking-[0.15em] text-[#e3b173] disabled:opacity-40">start conversation</button> : <button type="button" disabled={status !== "live"} onClick={stop} className="border border-[#bf6c5d] px-5 py-3 font-mono text-xs uppercase tracking-[0.15em] text-[#d88777] disabled:opacity-50">{status === "closing" ? "finishing…" : "end conversation"}</button>}
+          </div>
+          {liveStatus?.ready === false && <p className="mt-3 text-center font-mono text-[10px] text-[#81909a]">Set OPENAI_API_KEY and restart Foolscap to enable voice.</p>}
           <audio ref={audioRef} autoPlay controls className="mx-auto mt-5 h-8 max-w-full opacity-70" />
           {sessionId && <p className="mt-3 text-center font-mono text-[9px] text-[#63717a]">{sessionId} · gpt-live-1 + {backendModel} delegation</p>}
           {error && <p className="mx-auto mt-5 max-w-xl border border-[#653c35] bg-[#241715] p-3 font-mono text-[10px] text-[#df8e7d]">{error}</p>}

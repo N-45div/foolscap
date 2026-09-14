@@ -54,9 +54,11 @@ export function getCoordinator(options = {}) {
     apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
     baseUrl: options.baseUrl,
     model: options.model,
+    models: options.models,
     fetchImpl: options.fetchImpl,
     retryDelayMs: options.retryDelayMs,
     effort: options.effort,
+    maxOutputTokens: options.maxOutputTokens,
   });
   return singleton;
 }
@@ -82,7 +84,13 @@ export async function handleCoordinatorApi(req, res, url, options = {}) {
     if (rest === "/runs" && req.method === "GET") {
       await coordinator.reap();
       const state = await readWorkspace(file, root);
-      json(res, 200, { runs: (state.runs ?? []).map((run) => coordinator.get(run.id) ?? run), model: coordinator.ctx.model, ready: Boolean(coordinator.ctx.apiKey) });
+      json(res, 200, {
+        runs: (state.runs ?? []).map((run) => coordinator.get(run.id) ?? run),
+        model: coordinator.ctx.model,
+        models: coordinator.ctx.models,
+        ready: Boolean(coordinator.ctx.apiKey),
+        budget: { enforcement: "observed", hardCap: false, maxOutputTokens: coordinator.ctx.maxOutputTokens },
+      });
       return true;
     }
     if (rest === "/runs" && req.method === "POST") {
@@ -94,6 +102,7 @@ export async function handleCoordinatorApi(req, res, url, options = {}) {
       const run = await coordinator.start({
         goal: input.goal,
         budgetUsd: Number(input.budgetUsd),
+        model: input.model,
         fleetUrl: `http://${req.headers.host}`,
       });
       json(res, 202, run);

@@ -83,6 +83,9 @@ export type WorkspaceAgent = {
   id: string;
   label: string;
   driver: string;
+  available?: boolean;
+  status?: "ready" | "setup" | "unverified";
+  reason?: string | null;
 };
 
 export type WorkspaceSearchHit = {
@@ -147,6 +150,8 @@ export type RunEvent = {
   attempt?: number;
   phase?: string;
   role?: string;
+  from?: string;
+  model?: string;
 };
 
 export type CoordinatorRun = {
@@ -298,12 +303,20 @@ async function coordinatorResponse<T>(response: Response): Promise<T> {
   return value as T;
 }
 
-export function fetchRuns(): Promise<{ runs: CoordinatorRun[]; model: string; ready: boolean }> {
+export type CoordinatorStatus = {
+  runs: CoordinatorRun[];
+  model: string;
+  models: string[];
+  ready: boolean;
+  budget: { enforcement: "observed"; hardCap: false; maxOutputTokens: number };
+};
+
+export function fetchRuns(): Promise<CoordinatorStatus> {
   return fetch("/api/coordinator/runs").then((r) => coordinatorResponse(r));
 }
 
-export function startRun(goal: string, budgetUsd?: number): Promise<CoordinatorRun> {
-  return fetch("/api/coordinator/runs", { method: "POST", headers: COORDINATOR_HEADERS, body: JSON.stringify({ goal, budgetUsd }) }).then((r) => coordinatorResponse(r));
+export function startRun(goal: string, budgetUsd?: number, model?: string): Promise<CoordinatorRun> {
+  return fetch("/api/coordinator/runs", { method: "POST", headers: COORDINATOR_HEADERS, body: JSON.stringify({ goal, budgetUsd, model }) }).then((r) => coordinatorResponse(r));
 }
 
 export function answerRun(id: string, answer: string): Promise<CoordinatorRun> {

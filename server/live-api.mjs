@@ -10,6 +10,13 @@ import { createHash } from "node:crypto";
 import { readWorkspace, workspaceFile } from "./workspace.mjs";
 
 const LIVE_URL = "https://api.openai.com/v1/live/sessions";
+const DEFAULT_BACKEND_MODEL = "gpt-5.6-luna";
+
+function voiceModels(options = {}) {
+  const primary = options.backendModel ?? process.env.FOOLSCAP_VOICE_BACKEND_MODEL ?? DEFAULT_BACKEND_MODEL;
+  const extra = options.backendModels ?? String(process.env.FOOLSCAP_VOICE_BACKEND_MODELS ?? "").split(",");
+  return [primary, ...extra].map((model) => String(model ?? "").trim()).filter((model, index, all) => model && all.indexOf(model) === index);
+}
 
 function json(res, status, value) {
   res.statusCode = status;
@@ -177,6 +184,12 @@ export async function handleLiveApi(req, res, url, options = {}) {
     json(res, 403, { error: "cross-origin request refused" });
     return true;
   }
+  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
+  const models = voiceModels(options);
+  if (url.pathname.replace(/\/$/, "") === "/api/live/status" && req.method === "GET") {
+    json(res, 200, { ready: Boolean(apiKey), liveModel: "gpt-live-1", backendModel: models[0], backendModels: models });
+    return true;
+  }
   if (req.method !== "POST" || req.headers["x-foolscap"] !== "live") {
     json(res, req.method === "POST" ? 403 : 405, { error: req.method === "POST" ? "missing x-foolscap header" : "POST required" });
     return true;
@@ -191,7 +204,6 @@ export async function handleLiveApi(req, res, url, options = {}) {
     json(res, 400, { error: "an SDP offer is required" });
     return true;
   }
-  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   if (!apiKey) {
     json(res, 503, { error: "Set OPENAI_API_KEY to use GPT-Live voice" });
     return true;
@@ -199,7 +211,11 @@ export async function handleLiveApi(req, res, url, options = {}) {
 
   try {
     const state = await readWorkspace(options.file ?? workspaceFile(), options.root ?? process.cwd());
-    const backendModel = options.backendModel ?? process.env.FOOLSCAP_VOICE_BACKEND_MODEL ?? "gpt-5.6-luna";
+    const backendModel = typeof input.backendModel === "string" && input.backendModel.trim() ? input.backendModel.trim() : models[0];
+    if (!models.includes(backendModel)) {
+      json(res, 400, { error: "selected voice backend model is not configured" });
+      return true;
+    }
     const safetyId = createHash("sha256").update(`foolscap:${state.id}`).digest("hex");
     const upstream = await (options.fetchImpl ?? fetch)(LIVE_URL, {
       method: "POST",

@@ -5,6 +5,7 @@ import {
   fetchRuns,
   startRun,
   type CoordinatorRun,
+  type CoordinatorStatus,
   type RunEvent,
 } from "./model";
 
@@ -74,6 +75,8 @@ function EventRow({ e, onOpenAgents }: { e: RunEvent; onOpenAgents: () => void }
       return <p className="font-mono text-[11px] text-ink-2">you: {e.text}</p>;
     case "retry":
       return <p className="font-mono text-[11px] text-ink-3">retrying ({e.status})</p>;
+    case "model-fallback":
+      return <p className="font-mono text-[11px] text-brass-bright">model fallback · {e.from} → {e.model}</p>;
     case "error":
       return <p className="font-mono text-[11px] text-oxide">{e.text}</p>;
     case "done":
@@ -140,8 +143,10 @@ function RunCard({ run, open, onToggle, onOpenAgents, onChanged }: { run: Coordi
  * present tense while it runs.
  */
 export function Runs({ onOpenAgents, onChanged }: { onOpenAgents: () => void; onChanged: () => void }) {
-  const [data, setData] = useState<{ runs: CoordinatorRun[]; model: string; ready: boolean } | null>(null);
+  const [data, setData] = useState<CoordinatorStatus | null>(null);
   const [goal, setGoal] = useState("");
+  const [model, setModel] = useState("");
+  const [budget, setBudget] = useState("2");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -151,6 +156,7 @@ export function Runs({ onOpenAgents, onChanged }: { onOpenAgents: () => void; on
   const load = async () => {
     const next = await fetchRuns();
     setData(next);
+    setModel((current) => current || next.model);
     const latest = next.runs.map((run) => run.updatedAt).join(",");
     if (latest !== stamp.current) {
       stamp.current = latest;
@@ -170,7 +176,7 @@ export function Runs({ onOpenAgents, onChanged }: { onOpenAgents: () => void; on
     setBusy(true);
     setError(null);
     try {
-      const run = await startRun(text);
+      const run = await startRun(text, Number(budget), model || data?.model);
       setGoal("");
       setOpen(run.id);
       await load();
@@ -187,7 +193,7 @@ export function Runs({ onOpenAgents, onChanged }: { onOpenAgents: () => void; on
       <div className="p-5">
         <div className="flex items-baseline justify-between gap-3"><p className="instrument text-[9px]">tell it what needs doing</p><span className="font-mono text-[10px] text-ink-3">{data?.model ?? "gpt-6-astra"} plans · your agents work · foolscap checks</span></div>
         <form
-          className="mt-3 flex gap-2"
+          className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px_88px_auto]"
           onSubmit={(event) => { event.preventDefault(); void submit(); }}
         >
           <input
@@ -198,8 +204,13 @@ export function Runs({ onOpenAgents, onChanged }: { onOpenAgents: () => void; on
             aria-label="What needs doing"
             className="min-w-0 flex-1 border-b border-rule-strong bg-transparent px-1 py-2 font-mono text-sm outline-none placeholder:text-ink-3 focus:border-brass-bright disabled:opacity-60"
           />
+          <select value={model || data?.model || ""} onChange={(event) => setModel(event.target.value)} disabled={!ready} aria-label="Coordinator model" className="border border-rule-strong bg-paper px-2 py-2 font-mono text-[10px] disabled:opacity-60">
+            {(data?.models ?? [data?.model ?? "gpt-6-astra"]).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <label className="flex items-center gap-1 border border-rule-strong px-2 font-mono text-[10px] text-ink-3">$<input value={budget} onChange={(event) => setBudget(event.target.value)} type="number" min="0.25" max="50" step="0.25" aria-label="Coordinator observed budget" className="w-full bg-transparent text-ink outline-none" /></label>
           <button type="submit" disabled={!ready || busy || !goal.trim()} className="border border-brass-bright bg-brass-wash px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-brass-bright disabled:opacity-40">{busy ? "starting…" : "run"}</button>
         </form>
+        {ready && data?.budget && <p className="mt-2 font-mono text-[9px] text-ink-3">Observed coordinator budget; checked after each response; output capped at {data.budget.maxOutputTokens.toLocaleString()} tokens per turn. Agent costs may be unknown.</p>}
         {error && <p className="mt-2 font-mono text-[10px] text-oxide">{error}</p>}
         {!ready && <p className="mt-2 font-mono text-[10px] text-ink-3">Nothing runs without the key: the coordinator talks to OpenAI, your agents stay here. <code>OPENAI_API_KEY=… npx foolscap</code></p>}
       </div>

@@ -24,7 +24,8 @@
 import { EventEmitter } from "node:events";
 import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, delimiter, isAbsolute, join } from "node:path";
 import { AGENTS, Recorder, acpArchiveDir, resolveAgent } from "./acp.mjs";
 import { TranscriptBuilder } from "./acp-doc.mjs";
 import { ClaudeStreamBuilder } from "./claude-stream.mjs";
@@ -55,6 +56,45 @@ export const FLEET_AGENTS = {
 };
 
 const TRANSPORT = { claude: "native", devin: "cloud", command: "command", acp: "acp" };
+
+function commandExists(command, env = process.env) {
+  if (!command) return false;
+  const names = process.platform === "win32"
+    ? ["", ...String(env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";")]
+    : [""];
+  const direct = isAbsolute(command) || /[\\/]/.test(command);
+  const roots = direct ? [""] : String(env.PATH ?? "").split(delimiter).filter(Boolean);
+  return roots.some((root) => names.some((extension) => existsSync(root ? join(root, command + extension) : command + extension)));
+}
+
+/** Honest local readiness; no child process is started by this check. */
+export function fleetAgentCatalog(env = process.env) {
+  const overrideCommand = (name) => String(env[name] ?? "").trim().split(/\s+/)[0] || null;
+  const requirements = {
+    claude: [overrideCommand("FOOLSCAP_CLAUDE") ?? "claude"],
+    "claude-acp": [overrideCommand("FOOLSCAP_ACP_CLAUDE") ?? "npx", "claude"],
+    codex: [overrideCommand("FOOLSCAP_ACP_CODEX") ?? "npx", "codex"],
+    antigravity: [overrideCommand("FOOLSCAP_ACP_ANTIGRAVITY") ?? "npx", "agy"],
+    opencode: [overrideCommand("FOOLSCAP_ACP_OPENCODE") ?? "opencode"],
+    devin: [],
+    warp: [overrideCommand("FOOLSCAP_WARP") ?? "oz"],
+  };
+  return Object.entries(FLEET_AGENTS).map(([id, entry]) => {
+    const missing = requirements[id].filter((command) => !commandExists(command, env));
+    if (id === "devin" && !env.DEVIN_API_KEY) {
+      return { id, label: entry.label, driver: entry.driver, available: false, status: "setup", reason: "DEVIN_API_KEY is not set" };
+    }
+    const available = missing.length === 0;
+    return {
+      id,
+      label: entry.label,
+      driver: entry.driver,
+      available,
+      status: available ? (id === "antigravity" || id === "warp" ? "unverified" : "ready") : "setup",
+      reason: available ? (id === "antigravity" || id === "warp" ? "launch path has not been verified on this machine" : null) : `missing command: ${missing.join(", ")}`,
+    };
+  });
+}
 
 /** A command-driver template, or its FOOLSCAP_<AGENT> override. */
 function commandTemplate(agentKey, entry) {
@@ -366,6 +406,8 @@ export class Fleet extends EventEmitter {
 
   /** Spawn a session; returns at once — the agent boots in the background. */
   launch({ agent = "claude", cwd = process.cwd(), name, fleetUrl } = {}) {
+    const capability = this.agents().find((entry) => entry.id === agent);
+    if (capability && !capability.available) throw new Error(`${capability.label} is not ready: ${capability.reason}`);
     const id = randomBytes(6).toString("hex");
     const s = new AgentSession({
       id,
@@ -390,6 +432,10 @@ export class Fleet extends EventEmitter {
 
   list() {
     return [...this.sessions.values()].map((s) => s.snapshot());
+  }
+
+  agents() {
+    return fleetAgentCatalog();
   }
 
   close(id) {
