@@ -52,6 +52,8 @@ export type TaskAttempt = {
   outputTokens: number;
   costUsd?: number | null;
   routeDecisionId?: string | null;
+  purpose?: "manual" | "implement" | "repair" | "review" | "review-repair";
+  coordinatorRunId?: string | null;
   startedAt: string;
   updatedAt: string;
   endedAt: string | null;
@@ -124,7 +126,7 @@ export type CoordinationDecision = {
 
 export type RunEvent = {
   t: string;
-  kind: "message" | "task" | "call" | "result" | "dispatch" | "blocked" | "evidence" | "question" | "answer" | "retry" | "error" | "done" | "cancelled" | string;
+  kind: "message" | "task" | "call" | "result" | "dispatch" | "blocked" | "evidence" | "policy" | "question" | "answer" | "retry" | "error" | "done" | "cancelled" | string;
   text?: string;
   name?: string;
   args?: Record<string, unknown>;
@@ -143,6 +145,8 @@ export type RunEvent = {
   attemptState?: string | null;
   status?: number;
   attempt?: number;
+  phase?: string;
+  role?: string;
 };
 
 export type CoordinatorRun = {
@@ -155,6 +159,15 @@ export type CoordinatorRun = {
   usage: { input: number; cached: number; output: number };
   turns: number;
   taskIds: string[];
+  workflow?: Record<string, {
+    phase: string;
+    implementationRepairs: number;
+    reviewRepairs: number;
+    reviews: number;
+    lastWriterAgent: string | null;
+    error?: string;
+  }>;
+  policyNudges?: number;
   question: { text: string; askedAt: string } | null;
   summary: string | null;
   error: string | null;

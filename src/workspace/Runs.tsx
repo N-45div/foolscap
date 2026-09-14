@@ -66,6 +66,8 @@ function EventRow({ e, onOpenAgents }: { e: RunEvent; onOpenAgents: () => void }
         </p>
       );
     }
+    case "policy":
+      return <p className={`font-mono text-[11px] ${e.phase === "failed" ? "text-oxide" : e.phase === "complete" ? "text-moss" : "text-brass-bright"}`}>policy · {e.text}</p>;
     case "question":
       return <p className="font-mono text-[11px] text-brass-bright">? {e.text}</p>;
     case "answer":

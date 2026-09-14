@@ -83,7 +83,7 @@ export function synchronizedState(file, root, fleet) {
  * by "dispatch ready", and by the coordinator's async dispatch tool.
  * `instructions` are appended to the brief for this attempt only.
  */
-export async function launchWorkspaceTask({ taskId, requestedAgent = "auto", cwd, instructions, fleet, file, root, fleetUrl, onLaunch }) {
+export async function launchWorkspaceTask({ taskId, requestedAgent = "auto", cwd, instructions, fleet, file, root, fleetUrl, onLaunch, excludedAgents = [], purpose = "manual", coordinatorRunId = null }) {
   let launched = null;
   try {
     await mutateWorkspace(file, root, (state) => {
@@ -105,7 +105,9 @@ export async function launchWorkspaceTask({ taskId, requestedAgent = "auto", cwd
       });
       if (occupant) throw new Error(`workspace is busy with ${occupant.name || occupant.agent || "another agent"}`);
 
-      const decision = chooseAgent(state, task, requestedAgent, snapshots, Object.keys(FLEET_AGENTS));
+      const excluded = new Set(excludedAgents);
+      const availableAgents = Object.keys(FLEET_AGENTS).filter((agent) => !excluded.has(agent));
+      const decision = chooseAgent(state, task, requestedAgent, snapshots, availableAgents);
       const snapshot = fleet.launch({
         agent: decision.agent,
         cwd: workdir,
@@ -114,7 +116,7 @@ export async function launchWorkspaceTask({ taskId, requestedAgent = "auto", cwd
       });
       launched = { snapshot, decision };
       onLaunch?.(snapshot.id);
-      return attachTaskAttempt(state, task.id, snapshot, decision);
+      return attachTaskAttempt(state, task.id, snapshot, decision, { purpose, coordinatorRunId });
     });
   } catch (error) {
     // A failed state write must not leave an untracked process editing code.

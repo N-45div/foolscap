@@ -97,6 +97,9 @@ const now = () => new Date().toISOString();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ACTIVE = new Set(["starting", "idle", "working", "blocked"]);
 const SETTLED = new Set(["done", "error", "exited"]);
+const MAX_IMPLEMENTATION_REPAIRS = 2;
+const MAX_REVIEW_REPAIRS = 1;
+const MAX_REVIEW_ATTEMPTS = 2;
 
 function textOf(item) {
   return (item.content ?? [])
@@ -134,7 +137,7 @@ export function instructionsFor(state, run, agents) {
     "1. Understand the goal. If it is ambiguous in a way that changes the work, ask_user once, briefly. Otherwise do not ask.",
     "2. search_workspace before writing a brief; the task detail must name real files and say what done looks like.",
     "3. create_task, then dispatch_task. Dispatch is asynchronous: independent tasks can run at once; call wait_for_tasks when you have nothing else to do.",
-    "4. When a dispatch result arrives, read it. Failed tests or errors: dispatch a repair on the same task with the failing output in `instructions` (at most two repairs). Passing tests with edited files: dispatch a review on a different agent with `instructions` saying to read the diff and report problems, not fix them; act on real findings with one more repair.",
+    "4. Foolscap enforces the workflow after every dispatch: failed or missing validation requires a bounded repair; passing changes require a read-only review by a different agent; review findings allow one repair and another review. Follow the `policy.next_action` returned by dispatch_task.",
     "5. If the result says the agent needs the user (a permission), say so and wait; the person answers in the Agents view.",
     "6. Never report success without evidence. Finish with a short report: each task, which agent, what the evidence shows, and anything that still needs the person.",
     `Your own budget for this run is $${run.budgetUsd.toFixed(2)}; keep messages short.`,
@@ -171,6 +174,99 @@ class CoordinatorRun {
     this.run.status = "failed";
     this.run.error = message;
     this.event("error", { text: message });
+  }
+
+  policy(taskId) {
+    this.run.workflow ??= {};
+    this.run.workflow[taskId] ??= {
+      phase: "new",
+      implementationRepairs: 0,
+      reviewRepairs: 0,
+      reviews: 0,
+      lastWriterAgent: null,
+      lastEvidence: null,
+    };
+    return this.run.workflow[taskId];
+  }
+
+  workflowGate() {
+    const incomplete = [];
+    for (const taskId of this.run.taskIds) {
+      const policy = this.policy(taskId);
+      if (policy.phase === "complete") continue;
+      if (policy.phase === "failed") {
+        return { ok: false, terminal: true, message: `${taskId}: ${policy.error || "workflow policy failed"}` };
+      }
+      incomplete.push(`${taskId}: ${policy.phase}`);
+    }
+    return incomplete.length
+      ? { ok: false, terminal: false, message: `unfinished task workflow (${incomplete.join(", ")})` }
+      : { ok: true };
+  }
+
+  updatePolicy(taskId, role, agent, evidence) {
+    const policy = this.policy(taskId);
+    const observed = evidence.evidence ?? {};
+    const failed = evidence.attempt_state === "error" || evidence.attempt_state === "exited" ||
+      Boolean(evidence.error) || (observed.testsFailed ?? 0) > 0 || (observed.errors ?? 0) > 0;
+    const validated = (observed.testsPassed ?? 0) > 0;
+    const edited = evidence.edited_files?.length ?? observed.edited ?? 0;
+
+    if (role === "review") {
+      policy.reviews += 1;
+      const verdict = /FOOLSCAP_REVIEW:\s*(PASS|CHANGES_REQUESTED)/i.exec(evidence.last_message ?? "")?.[1]?.toUpperCase() ?? null;
+      if (failed || edited > 0 || verdict === "CHANGES_REQUESTED") {
+        if (policy.reviewRepairs >= MAX_REVIEW_REPAIRS) {
+          policy.phase = "failed";
+          policy.error = "review still found problems after the allowed review repair";
+        } else {
+          policy.phase = "needs-review-repair";
+        }
+      } else if (verdict === "PASS") {
+        policy.phase = "complete";
+      } else if (policy.reviews >= MAX_REVIEW_ATTEMPTS) {
+        policy.phase = "failed";
+        policy.error = "review agents did not return a machine-readable verdict";
+      } else {
+        policy.phase = "needs-review";
+      }
+    } else {
+      const reviewRepair = role === "review-repair";
+      if (role === "repair") policy.implementationRepairs += 1;
+      if (reviewRepair) policy.reviewRepairs += 1;
+      policy.lastWriterAgent = agent;
+      if (failed || !validated || edited === 0) {
+        const exhausted = reviewRepair
+          ? policy.reviewRepairs >= MAX_REVIEW_REPAIRS
+          : policy.implementationRepairs >= MAX_IMPLEMENTATION_REPAIRS;
+        if (exhausted) {
+          policy.phase = "failed";
+          policy.error = failed ? "validation still fails after the allowed repairs" : "the agent did not produce edited files with passing validation";
+        } else {
+          policy.phase = reviewRepair ? "needs-review-repair" : "needs-repair";
+        }
+      } else {
+        policy.phase = "needs-review";
+      }
+    }
+    policy.lastEvidence = {
+      agent,
+      role,
+      testsPassed: observed.testsPassed ?? 0,
+      testsFailed: observed.testsFailed ?? 0,
+      errors: observed.errors ?? 0,
+      edited,
+    };
+    const nextAction = {
+      new: "dispatch implementation",
+      "needs-repair": "dispatch repair with the failing or missing validation evidence",
+      "needs-review": "dispatch read-only review on a different agent",
+      "needs-review-repair": "dispatch one repair for the review findings",
+      complete: "workflow complete",
+      failed: policy.error,
+    }[policy.phase];
+    this.event("policy", { taskId, phase: policy.phase, role, agent, text: nextAction });
+    return { ...policy, next_action: nextAction };
   }
 
   // ── The model ───────────────────────────────────────────────────────
@@ -298,14 +394,45 @@ class CoordinatorRun {
     const { file, root, fleet } = this.ctx;
     const taskId = String(args.task_id ?? "");
     if (this.aborted) return { status: "cancelled", task_id: taskId };
+    // launchWorkspaceTask performs the atomic live-state reconciliation and
+    // duplicate check. This read is only for workflow validation.
+    const before = await readWorkspace(file, root);
+    const taskBefore = before.tasks.find((item) => item.id === taskId);
+    if (!taskBefore) throw new Error("task not found");
+    const policy = this.policy(taskId);
+    const role = {
+      new: "implement",
+      "needs-repair": "repair",
+      "needs-review": "review",
+      "needs-review-repair": "review-repair",
+    }[policy.phase];
+    if (!role) throw new Error(policy.phase === "complete" ? "task workflow is already complete" : policy.error || "task workflow cannot continue");
+    if (role === "repair" && policy.implementationRepairs >= MAX_IMPLEMENTATION_REPAIRS) throw new Error("implementation repair limit reached");
+    if (role === "review-repair" && policy.reviewRepairs >= MAX_REVIEW_REPAIRS) throw new Error("review repair limit reached");
+    if (role === "review" && policy.reviews >= MAX_REVIEW_ATTEMPTS) throw new Error("review attempt limit reached");
+
+    const requested = args.agent ?? "auto";
+    if (role === "review" && requested !== "auto" && requested !== null && requested === policy.lastWriterAgent) {
+      throw new Error("review must run on a different agent from the writer");
+    }
+    const policyInstruction = role === "review"
+      ? "Read-only review. Inspect the completed diff and relevant tests. Do not edit files. End your final response with exactly one line: FOOLSCAP_REVIEW: PASS or FOOLSCAP_REVIEW: CHANGES_REQUESTED. If changes are requested, state concrete findings before the marker."
+      : role === "repair" || role === "review-repair"
+        ? `This is a bounded ${role === "review-repair" ? "review repair" : "repair"}. Fix the observed problem and run relevant validation. Observed evidence: ${JSON.stringify(policy.lastEvidence)}`
+        : "This is the implementation attempt. Produce the requested change and run relevant validation.";
+    const extraInstruction = typeof args.instructions === "string" && args.instructions.trim() ? args.instructions.trim() : null;
+    const instructions = [policyInstruction, extraInstruction].filter(Boolean).join("\n\n");
     const { state, sessionId, decision } = await launchWorkspaceTask({
       taskId,
-      requestedAgent: args.agent ?? "auto",
-      instructions: typeof args.instructions === "string" && args.instructions.trim() ? args.instructions.trim() : undefined,
+      requestedAgent: requested,
+      instructions,
       fleet,
       file,
       root,
       fleetUrl: this.run.fleetUrl,
+      excludedAgents: role === "review" && policy.lastWriterAgent ? [policy.lastWriterAgent] : [],
+      purpose: role,
+      coordinatorRunId: this.run.id,
       onLaunch: (id) => {
         this.sessionIds.add(id);
         if (this.aborted) fleet.get(id)?.cancel();
@@ -330,7 +457,17 @@ class CoordinatorRun {
       edited: evidence.edited_files.length,
       attemptState: evidence.attempt_state,
     });
-    return evidence;
+    const nextPolicy = this.updatePolicy(taskId, role, decision.agent, evidence);
+    if (nextPolicy.phase === "complete" || nextPolicy.phase === "failed") {
+      await mutateWorkspace(file, root, (current) => ({
+        ...current,
+        tasks: current.tasks.map((item) => item.id === taskId
+          ? { ...item, status: nextPolicy.phase === "complete" ? "done" : "blocked", progress: nextPolicy.phase === "complete" ? 100 : item.progress, updatedAt: now() }
+          : item),
+      }));
+    }
+    await this.save();
+    return { ...evidence, policy: nextPolicy };
   }
 
   /** Resolve when the session's turn ends; note a permission wait once. */
@@ -397,16 +534,21 @@ class CoordinatorRun {
 
   startAsync(call) {
     const args = parseArgs(call.arguments);
-    const promise = this.dispatch(args)
-      .catch((err) => {
+    const promise = (async () => {
+      let result;
+      try {
+        result = await this.dispatch(args);
+      } catch (err) {
         this.event("error", { text: `dispatch failed: ${err.message}` });
-        return { status: "error", error: err.message, task_id: args.task_id ?? null };
-      })
-      .then((result) => {
-        this.pending.delete(call.call_id);
-        this.ready.push({ call_id: call.call_id, result });
-      });
+        result = { status: "error", error: err.message, task_id: args.task_id ?? null };
+      }
+      this.ready.push({ call_id: call.call_id, result });
+      this.event("result", { name: call.name, callId: call.call_id, summary: JSON.stringify(result).slice(0, 400) });
+      await this.save();
+      return result;
+    })();
     this.pending.set(call.call_id, promise);
+    promise.finally(() => this.pending.delete(call.call_id));
   }
 
   drainReady() {
@@ -475,9 +617,26 @@ class CoordinatorRun {
             await Promise.race([...this.pending.values()]);
             outputs.push(...this.drainReady());
           }
+          // An async dispatch can settle between the first drain and the
+          // pending-size check. Drain once more before deciding the model
+          // has finished the workflow.
+          if (!outputs.length) outputs.push(...this.drainReady());
         }
         if (this.aborted) break;
         if (!outputs.length) {
+          const gate = this.workflowGate();
+          if (!gate.ok) {
+            if (gate.terminal || run.policyNudges >= 3) {
+              this.fail(gate.terminal ? gate.message : `workflow policy was not completed after 3 reminders: ${gate.message}`);
+              break;
+            }
+            run.policyNudges += 1;
+            this.event("policy", { phase: "reminder", text: gate.message });
+            run.status = "working";
+            await this.save();
+            input = [{ role: "user", content: `Foolscap execution policy: ${gate.message}. Continue the workflow using dispatch_task and its returned policy.next_action.` }];
+            continue;
+          }
           run.status = "done";
           this.event("done", { summary: run.summary });
           break;
@@ -546,6 +705,8 @@ export function createCoordinator(options = {}) {
         turns: 0,
         lastResponseId: null,
         taskIds: [],
+        workflow: {},
+        policyNudges: 0,
         question: null,
         summary: null,
         error: null,

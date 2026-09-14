@@ -419,7 +419,7 @@ export function chooseAgent(state, task, requested, snapshots, availableAgents) 
   };
 }
 
-export function attachTaskAttempt(state, id, snapshot, decision) {
+export function attachTaskAttempt(state, id, snapshot, decision, context = {}) {
   let found = false;
   const now = new Date().toISOString();
   const tasks = state.tasks.map((task) => {
@@ -440,6 +440,8 @@ export function attachTaskAttempt(state, id, snapshot, decision) {
       outputTokens: snapshot.outputTokens ?? 0,
       costUsd: typeof snapshot.costUsd === "number" ? snapshot.costUsd : null,
       routeDecisionId: decision?.id ?? null,
+      purpose: context.purpose ?? "manual",
+      coordinatorRunId: context.coordinatorRunId ?? null,
       startedAt: snapshot.startedAt ?? now,
       updatedAt: now,
       endedAt: null,

@@ -95,7 +95,12 @@ test("a run plans, dispatches asynchronously, reads evidence, repairs, and finis
         assert.equal(outputs[0].call_id, "call_d2");
         assert.equal(outputs[0].output.evidence.testsPassed, 1);
         assert.equal(outputs[0].output.evidence.testsFailed, 0);
-        return { output: [message("Fix replay tests: repaired by codex; pnpm test passed (5/5); src/a.ts edited. Nothing needs you.")], usage: { input_tokens: 2000, input_tokens_details: { cached_tokens: 1500 }, output_tokens: 80 } };
+        assert.equal(outputs[0].output.policy.phase, "needs-review");
+        return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true, id: "call_d3" })] };
+      case 5:
+        assert.equal(outputs[0].call_id, "call_d3");
+        assert.equal(outputs[0].output.policy.phase, "complete");
+        return { output: [message("Fix replay tests: repaired by codex, validated, and independently reviewed. Nothing needs you.")], usage: { input_tokens: 2000, input_tokens_details: { cached_tokens: 1500 }, output_tokens: 80 } };
       default:
         throw new Error(`unexpected request ${index}`);
     }
@@ -116,27 +121,79 @@ test("a run plans, dispatches asynchronously, reads evidence, repairs, and finis
   // The repair carries the coordinator's instructions and goes where it said.
   const second = await fleet.session(2);
   assert.equal(second.agent, "codex");
-  assert.match(second.promptText, /Instructions for this attempt:\nFix: 1 failed/);
+  assert.match(second.promptText, /This is a bounded repair/);
+  assert.match(second.promptText, /Fix: 1 failed/);
   second.finish({ testsPassed: 1, costUsd: 0.4 });
+
+  const review = await fleet.session(3);
+  assert.notEqual(review.agent, second.agent);
+  assert.match(review.promptText, /Read-only review/);
+  review.finish({
+    testsPassed: 0,
+    edited: 0,
+    parts: [{ kind: "text", text: "The change is bounded and the recorded tests are green.\nFOOLSCAP_REVIEW: PASS" }],
+  });
 
   await coordinator.settled(run.id);
   const done = (await readWorkspace(file, dir)).runs.find((r) => r.id === run.id);
   assert.equal(done.status, "done");
-  assert.equal(api.requests.length, 5);
-  assert.match(done.summary, /pnpm test passed/);
+  assert.equal(api.requests.length, 6);
+  assert.match(done.summary, /independently reviewed/);
   assert.deepEqual(done.taskIds, [taskId]);
-  assert.equal(done.turns, 5);
+  assert.equal(done.turns, 6);
   assert.equal(done.usage.cached, 1500);
   assert.ok(done.costUsd > 0);
   const kinds = done.events.map((e) => e.kind);
-  assert.deepEqual(kinds.filter((k) => k === "dispatch").length, 2);
-  assert.deepEqual(kinds.filter((k) => k === "evidence").length, 2);
+  assert.deepEqual(kinds.filter((k) => k === "dispatch").length, 3);
+  assert.deepEqual(kinds.filter((k) => k === "evidence").length, 3);
+  assert.ok(kinds.includes("policy"));
   assert.equal(kinds.at(-1), "done");
   // The board caught up: one task, two attempts, in review with a known cost on the last one.
   const task = (await readWorkspace(file, dir)).tasks.find((t) => t.id === taskId);
-  assert.equal(task.attempts.length, 2);
-  assert.equal(task.status, "review");
+  assert.equal(task.attempts.length, 3);
+  assert.equal(task.status, "done");
   assert.equal(task.attempts[1].costUsd, 0.4);
+});
+
+test("the server blocks completion until a different agent returns a review verdict", async () => {
+  let taskId;
+  const script = (body, index) => {
+    const outputs = outputsIn(body);
+    if (index === 0) return { output: [call("create_task", { title: "Guarded change", detail: "Edit src/a.ts and run tests.", priority: "P1", budget_usd: 3 })] };
+    if (index === 1) {
+      taskId = outputs[0].output.task_id;
+      return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true, id: "impl" })] };
+    }
+    if (index === 2) {
+      assert.equal(outputs[0].output.policy.phase, "needs-review");
+      return { output: [message("Implementation is done.")] };
+    }
+    if (index === 3) {
+      assert.match(body.input[0].content, /needs-review/);
+      return { output: [call("dispatch_task", { task_id: taskId, agent: "claude", instructions: null }, { async: true, id: "bad-review" })] };
+    }
+    if (index === 4) {
+      assert.match(outputs[0].output.error, /different agent/);
+      return { output: [call("dispatch_task", { task_id: taskId, agent: "codex", instructions: null }, { async: true, id: "good-review" })] };
+    }
+    if (index === 5) {
+      assert.equal(outputs[0].output.policy.phase, "complete");
+      return { output: [message("Implemented, validated, and reviewed.")] };
+    }
+    throw new Error(`unexpected request ${index}`);
+  };
+  const { coordinator, fleet, file, dir } = await setup(script);
+  const run = await coordinator.start({ goal: "make a guarded change" });
+  const implementation = await fleet.session(1);
+  implementation.finish({ testsPassed: 1 });
+  const review = await fleet.session(2);
+  assert.equal(review.agent, "codex");
+  review.finish({ testsPassed: 0, edited: 0, parts: [{ kind: "text", text: "Looks correct.\nFOOLSCAP_REVIEW: PASS" }] });
+  await coordinator.settled(run.id);
+  const saved = (await readWorkspace(file, dir)).runs.find((item) => item.id === run.id);
+  assert.equal(saved.status, "done");
+  assert.equal(saved.policyNudges, 1);
+  assert.equal(saved.workflow[taskId].phase, "complete");
 });
 
 test("ask_user parks the run as needs-you until a person answers", async () => {
