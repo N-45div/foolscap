@@ -181,7 +181,7 @@ test("reported cost becomes the task's spend; unreported cost marks it unknown",
   assert.equal(unknown.tasks[0].spentKnown, false);
 });
 
-test("the coordinator balances ready work across agent capacity", async () => {
+test("dispatch ready keeps one writer per checkout", async () => {
   const root = await fixture();
   const dir = await mkdtemp(join(tmpdir(), "foolscap-workspace-dispatch-"));
   const file = join(dir, "workspace.json");
@@ -204,11 +204,41 @@ test("the coordinator balances ready work across agent capacity", async () => {
   });
   assert.equal(response.status, 202);
   const dispatched = await response.json();
-  assert.equal(dispatched.dispatch.launched, 2);
-  assert.equal(dispatched.decisions.length, 2);
+  assert.equal(dispatched.dispatch.launched, 1);
+  assert.equal(dispatched.dispatch.errors.length, 1);
+  assert.match(dispatched.dispatch.errors[0].error, /workspace is busy/);
+  assert.equal(dispatched.decisions.length, 1);
   // claude first, then the least-loaded fallback — never devin or warp on "auto"
-  assert.deepEqual(new Set(dispatched.decisions.map((decision) => decision.agent)), new Set(["claude", "codex"]));
-  assert.ok(dispatched.tasks.every((task) => task.status === "running" && task.attempts.length === 1));
+  assert.equal(dispatched.decisions[0].agent, "claude");
+  assert.equal(dispatched.tasks.filter((task) => task.status === "running").length, 1);
+  assert.equal(dispatched.tasks.filter((task) => task.status === "ready").length, 1);
+});
+
+test("concurrent starts cannot launch the same task twice", async () => {
+  const root = await fixture();
+  const dir = await mkdtemp(join(tmpdir(), "foolscap-workspace-race-"));
+  const file = join(dir, "workspace.json");
+  const fleet = new FakeFleet();
+  const initial = createTask(defaultWorkspace(root), { title: "Only once", budgetUsd: 3 });
+  await writeWorkspace(initial, file);
+  const taskId = initial.tasks[0].id;
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    await handleWorkspaceApi(req, res, url, { file, root, fleet });
+  });
+  servers.push(server);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const start = () => fetch(`${base}/api/workspace/tasks/${encodeURIComponent(taskId)}/run`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-foolscap": "workspace" },
+    body: JSON.stringify({ agent: "auto" }),
+  });
+  const responses = await Promise.all([start(), start()]);
+  assert.deepEqual(responses.map((response) => response.status).sort(), [202, 400]);
+  assert.equal(fleet.list().length, 1);
+  const state = await readWorkspace(file, root);
+  assert.equal(state.tasks[0].attempts.length, 1);
 });
 
 test("auto never routes to cloud or unverified agents unless named", () => {

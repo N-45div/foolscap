@@ -12,6 +12,7 @@ import {
   workspaceFile,
 } from "./workspace.mjs";
 import { FLEET_AGENTS, getFleet } from "./fleet.mjs";
+import { resolve } from "node:path";
 
 function json(res, status, value) {
   res.statusCode = status;
@@ -84,22 +85,43 @@ export function synchronizedState(file, root, fleet) {
  */
 export async function launchWorkspaceTask({ taskId, requestedAgent = "auto", cwd, instructions, fleet, file, root, fleetUrl, onLaunch }) {
   let launched = null;
-  await mutateWorkspace(file, root, (state) => {
-    const task = state.tasks.find((item) => item.id === taskId);
-    if (!task) throw new Error("task not found");
-    const current = task.attempts?.at(-1);
-    if (current && ACTIVE.has(current.status)) throw new Error("task already has an active agent session");
-    const decision = chooseAgent(state, task, requestedAgent, fleet.list(), Object.keys(FLEET_AGENTS));
-    const snapshot = fleet.launch({
-      agent: decision.agent,
-      cwd: typeof cwd === "string" && cwd.trim() ? cwd.trim() : state.root,
-      name: task.title,
-      fleetUrl,
+  try {
+    await mutateWorkspace(file, root, (state) => {
+      const task = state.tasks.find((item) => item.id === taskId);
+      if (!task) throw new Error("task not found");
+      const current = task.attempts?.at(-1);
+      if (current && ACTIVE.has(current.status)) throw new Error("task already has an active agent session");
+
+      // Two coding agents in one checkout can overwrite each other's edits.
+      // Keep one writer per checkout; separate repositories can still run up
+      // to the configured global capacity.
+      const workdir = resolve(typeof cwd === "string" && cwd.trim() ? cwd.trim() : state.root);
+      const key = process.platform === "win32" ? workdir.toLowerCase() : workdir;
+      const snapshots = fleet.list();
+      const occupant = snapshots.find((snapshot) => {
+        if (!ACTIVE.has(snapshot.status) || !snapshot.cwd) return false;
+        const activeDir = resolve(snapshot.cwd);
+        return (process.platform === "win32" ? activeDir.toLowerCase() : activeDir) === key;
+      });
+      if (occupant) throw new Error(`workspace is busy with ${occupant.name || occupant.agent || "another agent"}`);
+
+      const decision = chooseAgent(state, task, requestedAgent, snapshots, Object.keys(FLEET_AGENTS));
+      const snapshot = fleet.launch({
+        agent: decision.agent,
+        cwd: workdir,
+        name: task.title,
+        fleetUrl,
+      });
+      launched = { snapshot, decision };
+      onLaunch?.(snapshot.id);
+      return attachTaskAttempt(state, task.id, snapshot, decision);
     });
-    launched = { snapshot, decision };
-    onLaunch?.(snapshot.id);
-    return attachTaskAttempt(state, task.id, snapshot, decision);
-  });
+  } catch (error) {
+    // A failed state write must not leave an untracked process editing code.
+    const session = launched ? fleet.get(launched.snapshot.id) : null;
+    if (session && ACTIVE.has(session.status)) session.cancel();
+    throw error;
+  }
   const session = fleet.get(launched.snapshot.id);
   try {
     await waitUntilReady(session);
