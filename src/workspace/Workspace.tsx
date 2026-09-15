@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import {
+  ArrowsClockwise,
+  CheckCircle,
+  Circle,
+  Code,
+  FileText,
+  FolderOpen,
+  GitBranch,
+  MagnifyingGlass,
+  Plus,
+  Robot,
+  ShieldCheck,
+  TestTube,
+  WarningCircle,
+} from "@phosphor-icons/react";
+import {
   cancelWorkspaceTask,
   dispatchWorkspaceTasks,
   fetchWorkspaceAgents,
@@ -31,7 +46,7 @@ const MODES: Array<[WorkspaceMode, string, string]> = [
   ["usage", "usage", "What each task cost and why it went to that agent"],
   ["voice", "voice", "Say what needs doing (needs OPENAI_API_KEY)"],
 ];
-type Props = { onOpenAgents: () => void };
+type Props = { onOpenAgents: () => void; onStateChange?: (state: WorkspaceState) => void };
 const STATUSES: TaskStatus[] = ["backlog", "ready", "running", "review", "blocked", "done"];
 const money = (value: number) => `$${value.toFixed(2)}`;
 
@@ -77,7 +92,7 @@ function TaskInspector({ task, state, agents, busy, onClose, onRun, onCancel, on
       </dl>
       {attempt && <div className="mt-4 border-t border-rule pt-3"><div className="flex items-center"><p className="instrument text-[9px]">latest attempt</p><button type="button" onClick={onOpenAgents} className="ml-auto font-mono text-[9px] text-brass-bright hover:underline">open agent queue</button></div><div className="mt-2 grid grid-cols-3 gap-2 font-mono text-[10px]"><span>{attempt.status}</span><span className="tnum text-center">{attempt.outputTokens.toLocaleString()} tokens</span><span className="tnum text-right">{ev?.edited ?? 0} files</span></div>{ev && <p className={`mt-2 font-mono text-[10px] ${ev.testsFailed || ev.errors ? "text-oxide" : ev.testsPassed ? "text-moss" : "text-ink-3"}`}>{ev.testsFailed ? `${ev.testsFailed} failing test runs` : ev.testsPassed ? `${ev.testsPassed} passing test runs` : "waiting for validation evidence"}{ev.errors ? ` · ${ev.errors} errors` : ""}</p>}{attempt.error && <p className="mt-2 font-mono text-[10px] text-oxide">{attempt.error}</p>}</div>}
       <div className="mt-4 border-t border-rule pt-3"><p className="instrument text-[9px]">connected context</p><div className="mt-2 flex flex-wrap gap-1.5">{nodes.length ? nodes.map((node) => <span key={node.id} className="rounded-sm border border-rule-strong px-2 py-1 font-mono text-[10px] text-ink-2">{node.label}</span>) : <span className="font-mono text-[10px] text-ink-3">The coordinator will use connected sources and the workspace root.</span>}</div></div>
-      <div className="mt-4 flex gap-2 border-t border-rule pt-3">{active ? <button type="button" disabled={busy} onClick={onCancel} className="border border-oxide px-3 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-oxide disabled:opacity-50">cancel run</button> : <><select value={agent} onChange={(event) => setAgent(event.target.value)} aria-label="Agent for task" className="min-w-0 flex-1 border border-rule-strong bg-paper px-2 py-2 font-mono text-[10px]"><option value="auto">auto · first ready local agent</option>{(agents.length ? agents : [{ id: "claude", label: "claude code", driver: "claude", available: true }]).map((item) => <option key={item.id} value={item.id} disabled={item.available === false}>{item.label} · {item.driver}{item.available === false ? ` · ${item.reason ?? "setup needed"}` : item.status === "unverified" ? " · unverified" : ""}</option>)}</select><button type="button" disabled={busy || task.spentUsd >= task.budgetUsd} onClick={() => onRun(agent)} className="border border-brass-bright bg-brass-wash px-3 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-brass-bright disabled:opacity-50">{busy ? "starting…" : "run task"}</button></>}</div>
+      <div className="mt-4 flex gap-2 border-t border-rule pt-3">{active ? <button type="button" disabled={busy} onClick={onCancel} className="border border-oxide px-3 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-oxide disabled:opacity-50">cancel run</button> : <><select value={agent} onChange={(event) => setAgent(event.target.value)} aria-label="Agent for task" className="min-w-0 flex-1 border border-rule-strong bg-paper px-2 py-2 font-mono text-[10px]"><option value="auto">auto · first ready local agent</option>{agents.map((item) => <option key={item.id} value={item.id} disabled={item.available === false}>{item.label} · {item.driver}{item.available === false ? ` · ${item.reason ?? "setup needed"}` : item.status === "unverified" ? " · unverified" : ""}</option>)}</select><button type="button" disabled={busy || task.spentUsd >= task.budgetUsd} onClick={() => onRun(agent)} className="border border-brass-bright bg-brass-wash px-3 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-brass-bright disabled:opacity-50">{busy ? "starting…" : "run task"}</button></>}</div>
     </aside>
   );
 }
@@ -188,7 +203,7 @@ function Overview({ state, loaded, onInspect, onReindex, onOpenAgents, onRefresh
   ];
   const done = steps.filter(([ok]) => ok).length;
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-6"><Runs onOpenAgents={onOpenAgents} onChanged={onRefresh} /><div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+    <div className="min-w-0 flex-1 overflow-y-auto p-6"><Runs onOpenAgents={onOpenAgents} onOpenVoice={() => {}} onChanged={onRefresh} /><div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
       <section className="border border-rule bg-paper-raised p-5"><div className="flex items-start justify-between gap-3"><div><p className="instrument text-[9px]">getting started</p><h2 className="mt-1 font-mono text-base font-bold">{done === steps.length ? "Everything is connected" : "Three steps"}</h2></div><span className="tnum font-mono text-[10px] text-ink-3">{done} / {steps.length}</span></div>
         <ol className="mt-4 space-y-3">{steps.map(([ok, label, hint]) => <li key={label} className="flex gap-3"><span className={`mt-0.5 h-4 w-4 shrink-0 border text-center font-mono text-[10px] leading-4 ${ok ? "border-moss bg-moss-wash text-moss" : "border-rule-strong text-ink-3"}`}>{ok ? "✓" : ""}</span><div><span className={`font-mono text-xs ${ok ? "text-ink-3 line-through" : "text-ink"}`}>{label}</span><span className="mt-0.5 block text-[11px] leading-relaxed text-ink-3">{hint}</span></div></li>)}</ol>
         {!loaded && <p className="mt-4 font-mono text-[10px] text-ink-3">reading your workspace…</p>}
@@ -198,7 +213,75 @@ function Overview({ state, loaded, onInspect, onReindex, onOpenAgents, onRefresh
   );
 }
 
-export function Workspace({ onOpenAgents }: Props) {
+void Overview;
+
+function MissionGraph({ state, onOpen }: { state: WorkspaceState; onOpen: () => void }) {
+  const initial = state.nodes.find((node) => node.kind === "module") ?? state.nodes[0];
+  const [selectedId, setSelectedId] = useState(initial?.id ?? "");
+  const visible = initial ? [initial, ...state.nodes.filter((node) => node.id !== initial.id)].slice(0, 9) : [];
+  const selected = state.nodes.find((node) => node.id === selectedId) ?? visible[0];
+  const positions = visible.map((node, index) => {
+    if (index === 0) return { ...node, x: 210, y: 112 };
+    const angle = ((index - 1) / Math.max(1, visible.length - 1)) * Math.PI * 2 - Math.PI / 2;
+    const radiusX = index % 2 === 0 ? 145 : 116;
+    const radiusY = index % 2 === 0 ? 78 : 64;
+    return { ...node, x: 210 + Math.cos(angle) * radiusX, y: 112 + Math.sin(angle) * radiusY };
+  });
+  const ids = new Set(visible.map((node) => node.id));
+  const edges = state.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+  return (
+    <section className="flex min-h-[430px] flex-col overflow-hidden rounded-xl border border-rule bg-[#0b1014] text-[#edf0ee]">
+      <header className="flex items-center border-b border-[#252f36] px-4 py-3">
+        <div><p className="instrument text-[8px] text-[#798891]">Connected context</p><p className="mt-1 text-xs font-medium">Knowledge graph</p></div>
+        <button type="button" onClick={onOpen} className="ml-auto flex items-center gap-1.5 rounded-md border border-[#303c44] px-2 py-1.5 text-[10px] text-[#aeb7bc] hover:border-[#d6a05c] hover:text-[#e3b173]"><MagnifyingGlass size={13} />Explore</button>
+      </header>
+      {visible.length ? <div className="relative min-h-[245px] flex-1 overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(#6f7c84 0.7px, transparent 0.7px)", backgroundSize: "16px 16px" }} />
+        <svg viewBox="0 0 420 224" role="img" aria-label="Connected workspace knowledge" className="relative h-full min-h-[245px] w-full">
+          {edges.map((edge) => { const from = positions.find((node) => node.id === edge.from); const to = positions.find((node) => node.id === edge.to); if (!from || !to) return null; const active = edge.from === selected?.id || edge.to === selected?.id; return <line key={`${edge.from}-${edge.to}-${edge.label}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={active ? "#d6a05c" : "#48545c"} strokeWidth={active ? 1.6 : 1} opacity={active ? 0.9 : 0.45} />; })}
+          {positions.map((node) => { const active = node.id === selected?.id; return <g key={node.id} onClick={() => setSelectedId(node.id)} className="cursor-pointer"><circle cx={node.x} cy={node.y} r={active ? 18 : 12} fill={active ? "#242c31" : "#13191e"} stroke={NODE_COLORS[node.kind]} strokeWidth={active ? 2.5 : 1.5} /><text x={node.x} y={node.y + 28} fill={active ? "#edf0ee" : "#85929a"} fontSize="8" textAnchor="middle">{node.label.length > 19 ? `${node.label.slice(0, 17)}…` : node.label}</text></g>; })}
+        </svg>
+      </div> : <div className="flex min-h-[245px] flex-1 items-center justify-center px-8 text-center text-xs leading-relaxed text-[#74818a]">Connect a source to build the workspace graph.</div>}
+      <div className="border-t border-[#252f36] bg-[#0d1216] p-4"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-[#303c44] text-[#d6a05c]">{selected?.kind === "document" ? <FileText size={15} /> : <Code size={15} />}</span><div className="min-w-0"><p className="truncate text-xs font-medium">{selected?.label ?? "No context selected"}</p><p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[#7f8c94]">{selected?.detail ?? "Indexed files and their relationships will appear here."}</p></div></div></div>
+    </section>
+  );
+}
+
+function MissionOverview({ state, loaded, onInspect, onOpenAgents, onOpenGraph, onOpenVoice, onRefresh }: { state: WorkspaceState; loaded: boolean; onInspect: (id: string) => void; onOpenAgents: () => void; onOpenGraph: () => void; onOpenVoice: () => void; onRefresh: () => void }) {
+  const activeTasks = state.tasks.filter((task) => ["running", "review", "blocked", "ready"].includes(task.status));
+  const focus = activeTasks[0] ?? state.tasks[0];
+  const attempts = focus?.attempts ?? [];
+  const statusTone = (status: WorkspaceTask["status"]) => status === "blocked" ? "text-oxide" : status === "done" ? "text-moss" : status === "running" || status === "review" ? "text-brass-bright" : "text-ink-3";
+  const stageIcon = (purpose: string | undefined, complete: boolean, failed: boolean) => failed ? <WarningCircle size={16} weight="fill" /> : complete ? <CheckCircle size={16} weight="fill" /> : purpose === "review" ? <ShieldCheck size={16} /> : purpose === "implement" || purpose === "repair" ? <Code size={16} /> : <TestTube size={16} />;
+  return (
+    <div className="min-w-0 flex-1 overflow-y-auto px-6 pb-8 pt-5 xl:px-8">
+      <Runs onOpenAgents={onOpenAgents} onOpenVoice={onOpenVoice} onChanged={onRefresh} />
+      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+        <section className="overflow-hidden rounded-xl border border-rule bg-paper-raised">
+          <header className="flex min-h-[66px] items-center border-b border-rule px-5 py-3">
+            <div className="min-w-0"><p className="instrument text-[8px]">Execution</p><h2 className="mt-1 truncate text-sm font-semibold">{focus?.title ?? "No active mission"}</h2></div>
+            {focus && <button type="button" onClick={() => onInspect(focus.id)} className={`instrument ml-auto rounded-full border border-rule px-2.5 py-1 text-[8px] ${statusTone(focus.status)}`}>{STATUS_LABELS[focus.status]}</button>}
+          </header>
+          {focus ? <div className="p-5">
+            <p className="max-w-[72ch] text-xs leading-relaxed text-ink-3">{focus.detail}</p>
+            <div className="relative mt-5 space-y-1 before:absolute before:bottom-5 before:left-[15px] before:top-5 before:w-px before:bg-rule">
+              {attempts.length ? attempts.slice(-4).map((attempt, index) => { const evidence = attempt.evidence; const failed = evidence.testsFailed > 0 || evidence.errors > 0 || attempt.status === "error"; const complete = attempt.status === "done" && !failed; const title = attempt.purpose === "review" ? "Independent review" : attempt.purpose === "repair" || attempt.purpose === "review-repair" ? "Repair" : attempt.purpose === "implement" ? "Implement" : `Attempt ${Math.max(1, attempts.length - 3 + index)}`; return <button type="button" onClick={() => onInspect(focus.id)} key={attempt.id} className="relative flex w-full items-start gap-4 rounded-lg px-1 py-3 text-left hover:bg-paper-sunk/50"><span className={`relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border bg-paper-raised ${failed ? "border-oxide text-oxide" : complete ? "border-moss text-moss" : "border-brass text-brass-bright"}`}>{stageIcon(attempt.purpose, complete, failed)}</span><span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="text-xs font-medium">{title}</span><span className="font-mono text-[9px] text-ink-3">{attempt.agentLabel}</span></span><span className="mt-1 block font-mono text-[10px] text-ink-3">{failed ? `${evidence.testsFailed} failed · ${evidence.errors} errors` : evidence.testsPassed ? `${evidence.testsPassed} checks passed · ${evidence.edited} files edited` : `${attempt.status} · ${attempt.outputTokens.toLocaleString()} tokens`}</span></span><span className={`instrument mt-1 text-[8px] ${failed ? "text-oxide" : complete ? "text-moss" : "text-brass-bright"}`}>{failed ? "Failed" : complete ? "Completed" : attempt.status}</span></button>; }) : <div className="relative flex items-start gap-4 py-4"><span className="relative z-10 grid h-7 w-7 place-items-center rounded-full border border-rule-strong bg-paper-raised text-ink-3"><Circle size={12} /></span><div><p className="text-xs font-medium">Ready for delegation</p><p className="mt-1 text-[10px] text-ink-3">Choose this task to run it with an available local agent.</p></div></div>}
+            </div>
+          </div> : <div className="flex min-h-[250px] items-center justify-center p-8 text-center"><div><GitBranch size={24} className="mx-auto text-ink-3" /><p className="mt-3 text-sm font-medium">Capture the first mission</p><p className="mt-1 text-xs text-ink-3">Add a task above or tell the coordinator what outcome you need.</p></div></div>}
+          <div className="border-t border-rule bg-paper-sunk/35 px-5 py-3"><div className="flex items-center gap-5 font-mono text-[9px] text-ink-3"><span>{focus?.attempts?.length ?? 0} attempts</span><span>{focus ? spendLabel(focus).text : "$0.00"} spend</span><button type="button" onClick={onOpenAgents} className="ml-auto flex items-center gap-1.5 text-brass-bright hover:underline"><Robot size={13} />Open agents</button></div></div>
+        </section>
+        <MissionGraph state={state} onOpen={onOpenGraph} />
+      </div>
+      <section className="mt-5 overflow-hidden rounded-xl border border-rule bg-paper-raised">
+        <header className="flex items-center border-b border-rule px-5 py-3"><div><p className="instrument text-[8px]">Mission queue</p><p className="mt-1 text-xs font-medium">Work in motion</p></div><span className="tnum ml-auto font-mono text-[9px] text-ink-3">{activeTasks.length} active · {state.tasks.length} total</span></header>
+        <div className="grid gap-px bg-rule [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">{(activeTasks.length ? activeTasks : state.tasks).slice(0, 3).map((task) => <button type="button" key={task.id} onClick={() => onInspect(task.id)} className="bg-paper-raised p-4 text-left hover:bg-brass-wash"><div className="flex items-center gap-2"><span className={`h-1.5 w-1.5 rounded-full ${task.status === "blocked" ? "bg-oxide" : task.status === "done" ? "bg-moss" : "bg-brass-bright"}`} /><span className={`instrument text-[8px] ${statusTone(task.status)}`}>{STATUS_LABELS[task.status]}</span><span className="tnum ml-auto font-mono text-[9px] text-ink-3">{task.progress}%</span></div><span className="mt-2 block truncate text-xs font-medium">{task.title}</span><span className="mt-2 block truncate font-mono text-[9px] text-ink-3">{task.agent} · {spendLabel(task).text}</span></button>)}{!state.tasks.length && <div className="col-span-full bg-paper-raised px-5 py-8 text-center text-xs text-ink-3">No tasks yet. Capture one from the Work header.</div>}</div>
+      </section>
+      {!loaded && <p className="mt-4 font-mono text-[10px] text-ink-3">Reading your workspace…</p>}
+    </div>
+  );
+}
+
+export function Workspace({ onOpenAgents, onStateChange }: Props) {
   const [mode, setMode] = useState<WorkspaceMode>("overview");
   const [state, setState] = useState<WorkspaceState>(() => emptyWorkspace());
   const [loaded, setLoaded] = useState(false);
@@ -211,7 +294,7 @@ export function Workspace({ onOpenAgents }: Props) {
   const [dispatching, setDispatching] = useState(false);
   const [agents, setAgents] = useState<WorkspaceAgent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const receive = (next: WorkspaceState) => { setState(next); setLoaded(true); };
+  const receive = (next: WorkspaceState) => { setState(next); setLoaded(true); onStateChange?.(next); };
   const hasActiveAttempt = state.tasks.some((task) => {
     const status = task.attempts?.at(-1)?.status;
     return !!status && ["starting", "idle", "working", "blocked"].includes(status);
@@ -242,14 +325,21 @@ export function Workspace({ onOpenAgents }: Props) {
   const ready = state.tasks.filter((task) => task.status === "ready").length;
   return (
     <div className="flex min-h-full min-w-0 flex-col bg-paper">
-      <header className="border-b border-rule bg-paper-raised px-5 py-4">
+      <header className="border-b border-rule bg-paper px-6 pb-4 pt-5 xl:px-8">
+        <div className="flex items-center gap-2 text-[10px] text-ink-3"><span>{state.name || "Workspace"}</span><span>/</span><span className="text-ink-2">Work</span><div className="ml-auto flex items-center gap-2"><button type="button" onClick={() => setMode("graph")} className="flex items-center gap-2 rounded-md border border-rule bg-paper-raised px-3 py-2 text-[10px] text-ink-3 hover:border-rule-strong hover:text-ink"><MagnifyingGlass size={14} />Search <kbd className="font-mono text-[9px] text-ink-3">⌘K</kbd></button></div></div>
+        <div className="mt-5 flex flex-wrap items-end gap-4"><div className="min-w-0 flex-1"><h1 className="text-[26px] font-semibold tracking-[-0.035em]">Work, in motion.</h1><p className="mt-1.5 max-w-[64ch] text-xs leading-relaxed text-ink-3">Coordinate agents, follow the evidence, and keep every mission connected to its source.</p></div><div className="flex items-center gap-2"><button type="button" disabled={!ready || dispatching} onClick={() => void dispatch()} title="Route ready tasks by budget and current fleet load" className="flex items-center gap-2 rounded-md border border-rule-strong px-3 py-2 text-[10px] text-ink-2 hover:border-moss hover:text-moss disabled:opacity-40"><GitBranch size={14} />{dispatching ? "Dispatching" : `Dispatch ${ready}`}</button><button type="button" onClick={() => { setSourcePath(state.root); setSourceOpen((value) => !value); }} className="flex items-center gap-2 rounded-md border border-brass/70 bg-brass-wash px-3 py-2 text-[10px] text-brass-bright hover:border-brass"><Plus size={14} />Connect source</button></div></div>
+        {sourceOpen && <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-rule bg-paper-raised p-3"><FolderOpen size={16} className="text-brass-bright" /><input value={sourcePath} onChange={(event) => setSourcePath(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connect(); }} placeholder="Absolute path to a repository or notes folder" autoFocus className="min-w-[280px] flex-1 bg-transparent text-xs outline-none placeholder:text-ink-3" /><button type="button" disabled={syncing} onClick={() => void connect()} className="flex items-center gap-1.5 rounded-md border border-brass px-3 py-1.5 text-[10px] text-brass-bright disabled:opacity-50"><ArrowsClockwise size={13} className={syncing ? "animate-spin" : ""} />{syncing ? "Indexing" : "Index"}</button></div>}
+        {error && <p className="mt-3 font-mono text-[10px] text-oxide">{error}</p>}
+        <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-rule pt-3"><nav className="flex gap-1" aria-label="Work views">{MODES.map(([id, label, tip]) => <button key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id} title={tip} className={`rounded-md px-2.5 py-1.5 text-[10px] font-medium capitalize transition ${mode === id ? "bg-paper-raised text-brass-bright shadow-sm" : "text-ink-3 hover:text-ink"}`}>{label}</button>)}</nav><div className="ml-auto flex items-center gap-4 font-mono text-[9px] text-ink-3"><span><b className="text-ink">{state.sources.length}</b> sources</span><span><b className="text-ink">{state.nodes.length}</b> entities</span><span className={error ? "text-oxide" : "text-moss"}>{error ? "Sync issue" : "Local sync healthy"}</span><div className="flex items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTask(); }} placeholder="Capture a task…" aria-label="Capture a task" className="w-36 bg-transparent py-1.5 text-[9px] outline-none placeholder:text-ink-3" /><button type="button" onClick={addTask} aria-label="Add task" className="text-brass-bright"><Plus size={13} /></button></div></div></div>
+      </header>
+      <header className="hidden border-b border-rule bg-paper-raised px-5 py-4">
         <div className="flex flex-wrap items-start gap-4"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${error ? "bg-oxide" : "bg-moss"}`} /><span className="instrument text-[9px]">workspace / local</span><span className="truncate font-mono text-[10px] text-ink-3">· {loaded ? state.root : "connecting…"}</span></div><h1 className="mt-2 font-mono text-xl font-bold tracking-tight">{state.name || "Work"}<span className="ml-2 text-brass-bright">/ work</span></h1><p className="mt-1 max-w-[70ch] text-xs text-ink-2">{state.description}</p></div><div className="flex flex-wrap items-center justify-end gap-2"><button type="button" disabled={!ready || dispatching} onClick={() => void dispatch()} title="Route ready tasks by budget and current fleet load" className="border border-moss px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-moss disabled:opacity-40">{dispatching ? "dispatching…" : `dispatch ready · ${ready}`}</button><button type="button" onClick={onOpenAgents} className="border border-rule-strong px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] hover:border-brass-bright">open agents</button><button type="button" onClick={() => { setSourcePath(state.root); setSourceOpen((value) => !value); }} className="border border-brass-bright bg-brass-wash px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-brass-bright">connect source</button></div></div>
         {sourceOpen && <div className="mt-4 flex flex-wrap items-center gap-2 border border-rule bg-paper-sunk p-3"><span className="instrument text-[9px]">local folder</span><input value={sourcePath} onChange={(event) => setSourcePath(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connect(); }} placeholder="absolute path to a repository or notes folder" autoFocus className="min-w-[280px] flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-ink-3" /><button type="button" disabled={syncing} onClick={() => void connect()} className="border border-brass-bright px-3 py-1.5 font-mono text-[10px] text-brass-bright disabled:opacity-50">{syncing ? "indexing…" : "index"}</button></div>}
         {error && <p className="mt-3 font-mono text-[10px] text-oxide">{error}</p>}
         <nav className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-rule pt-3" aria-label="Work">{MODES.map(([id, label, tip]) => <button key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id} title={tip} className={`instrument transition-colors hover:text-brass-bright ${mode === id ? "text-brass-bright" : ""}`}>{label}</button>)}</nav>
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] text-ink-3"><span><b className="text-ink">{state.sources.length}</b> sources indexed</span><span><b className="text-ink">{state.nodes.length}</b> entities mapped</span><span><b className="text-ink">{running}</b> active task{running === 1 ? "" : "s"}</span><span className={error ? "text-oxide" : "text-moss"}>{error ? "sync issue" : "sync healthy"}</span><div className="ml-auto flex items-center gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTask(); }} placeholder="capture a task…" aria-label="Capture a task" className="w-44 border-b border-rule-strong bg-transparent px-1 py-1 font-mono text-[10px] outline-none placeholder:text-ink-3 focus:border-brass-bright" /><button type="button" onClick={addTask} className="text-brass-bright hover:underline">+ add</button></div></div>
       </header>
-      {mode === "overview" && <Overview state={state} loaded={loaded} onInspect={setSelectedId} onReindex={(path) => void connect(path)} onOpenAgents={onOpenAgents} onRefresh={() => { fetchWorkspace().then(receive).catch(() => {}); }} />}
+      {mode === "overview" && <MissionOverview state={state} loaded={loaded} onInspect={setSelectedId} onOpenAgents={onOpenAgents} onOpenGraph={() => setMode("graph")} onOpenVoice={() => setMode("voice")} onRefresh={() => { fetchWorkspace().then(receive).catch(() => {}); }} />}
       {mode === "board" && <Board state={state} agents={agents} busyTaskId={busyTaskId} onChange={commit} selectedId={selectedId} setSelectedId={setSelectedId} onRun={(id, agent) => void execute(id, agent)} onCancel={(id) => void cancel(id)} onOpenAgents={onOpenAgents} />}
       {mode === "graph" && <Graph state={state} />}
       {mode === "usage" && <Usage state={state} />}
