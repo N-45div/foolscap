@@ -63,6 +63,11 @@
 
 ### Changed
 
+- The desktop interface now opens on Work with a focused mission cockpit:
+  command entry, live execution evidence, connected knowledge, task queue,
+  sources, model choice, and local status share one consistent dark shell.
+  History, Prompts, Agents, Board, Graph, Usage, and Voice remain directly
+  accessible without leaving the workspace.
 - Coordinator and voice backend model choices use configured allowlists and
   expose readiness to the UI. Missing local commands are disabled before
   launch. Coordinator Responses are bounded to 1,200 output tokens; budget
@@ -73,8 +78,8 @@
   `npx foolscap` and the Linux bundle install less.
 - Four views again, not eight. Workspace, Board, Graph, Voice and Usage
   are tabs inside one **▸ Work** entry; History, Prompts and Agents are
-  as before, and History is still where you land. The welcome overlay
-  explains Work in one card.
+  as before, and Work is now the launch view. Help remains available from
+  the local-status footer.
 - "auto" routing starts with native Claude Code — the driver verified on
   the real binary and the one that reports cost — then Codex and
   OpenCode by load. Devin (billed, cloud) and the unverified Warp and
