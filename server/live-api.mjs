@@ -10,11 +10,13 @@ import { createHash } from "node:crypto";
 import { readWorkspace, workspaceFile } from "./workspace.mjs";
 
 const LIVE_URL = "https://api.openai.com/v1/live/sessions";
-const DEFAULT_BACKEND_MODEL = "gpt-5.6-luna";
+export const LIVE_MODEL = "gpt-live-1";
+export const DEFAULT_BACKEND_MODEL = "gpt-5.6-luna";
 
-function voiceModels(options = {}) {
-  const primary = options.backendModel ?? process.env.FOOLSCAP_VOICE_BACKEND_MODEL ?? DEFAULT_BACKEND_MODEL;
-  const extra = options.backendModels ?? String(process.env.FOOLSCAP_VOICE_BACKEND_MODELS ?? "").split(",");
+export function voiceModels(options = {}) {
+  const env = options.env ?? process.env;
+  const primary = options.backendModel ?? env.FOOLSCAP_VOICE_BACKEND_MODEL ?? DEFAULT_BACKEND_MODEL;
+  const extra = options.backendModels ?? String(env.FOOLSCAP_VOICE_BACKEND_MODELS ?? "").split(",");
   return [primary, ...extra].map((model) => String(model ?? "").trim()).filter((model, index, all) => model && all.indexOf(model) === index);
 }
 
@@ -147,7 +149,7 @@ const TOOLS = [
 function sessionConfig(state, backendModel) {
   const sourceSummary = state.sources.slice(0, 8).map((source) => source.label).join(", ") || "none";
   return {
-    model: "gpt-live-1",
+    model: LIVE_MODEL,
     instructions: [
       "You are the voice interface for Foolscap, a local workspace and coding-agent coordinator.",
       "Speak briefly and naturally. Help the user capture, inspect, organize, and start work without switching tabs.",
@@ -187,7 +189,7 @@ export async function handleLiveApi(req, res, url, options = {}) {
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   const models = voiceModels(options);
   if (url.pathname.replace(/\/$/, "") === "/api/live/status" && req.method === "GET") {
-    json(res, 200, { ready: Boolean(apiKey), liveModel: "gpt-live-1", backendModel: models[0], backendModels: models });
+    json(res, 200, { ready: Boolean(apiKey), liveModel: LIVE_MODEL, backendModel: models[0], backendModels: models });
     return true;
   }
   if (req.method !== "POST" || req.headers["x-foolscap"] !== "live") {

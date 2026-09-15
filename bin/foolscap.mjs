@@ -8,6 +8,7 @@
  *
  *   foolscap                 open the viewer on your archive
  *                            (OPENAI_API_KEY unlocks the coordinator + voice)
+ *   foolscap doctor          check provider, voice and local-agent readiness
  *   foolscap skill           install the Claude Code skill
  *   foolscap --root <dir>    view a curated/copied archive
  *   foolscap --port <n>      pick a port (default 4517)
@@ -73,6 +74,15 @@ if (args[0] === "skill") {
     process.exit(1);
   }
   process.exit(0);
+}
+
+// ── foolscap doctor — launch readiness without starting anything ───────────
+if (args[0] === "doctor") {
+  const { formatReadiness, readinessReport } = await import("../server/doctor.mjs");
+  const report = readinessReport();
+  if (args.includes("--json")) console.log(JSON.stringify(report, null, 2));
+  else say(`\n  ${wordmark} ${dim("· launch doctor")}\n\n${formatReadiness(report).split("\n").map((line) => `  ${line}`).join("\n")}\n`);
+  process.exit(report.launchReady ? 0 : 1);
 }
 
 // ── foolscap acp — expose a local agent over the network ──────────────
@@ -143,6 +153,7 @@ ${exposeWarning}`);
   ${wordmark} ${dim("· the notebook for coding agents")}
 
   ${bold("foolscap")}                 open the viewer on your archive
+  ${bold("foolscap doctor")}          check provider, voice and local-agent readiness
   ${bold("foolscap skill")}           install the Claude Code skill
   ${bold("foolscap acp")}             serve a local agent over ACP ${dim("(see below)")}
   ${bold("foolscap --root")} ${dim("<dir>")}    view a curated or copied archive

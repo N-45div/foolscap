@@ -45,7 +45,7 @@ export const PRICES = {
 
 export const DEFAULT_MODELS = ["gpt-6-astra", "gpt-5.6-luna"];
 
-function configuredModels(primary, value) {
+export function configuredModels(primary, value) {
   const listed = Array.isArray(value) ? value : String(value ?? "").split(",");
   return [primary, ...listed, ...DEFAULT_MODELS]
     .map((model) => String(model ?? "").trim())
