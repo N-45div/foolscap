@@ -15,6 +15,9 @@
   "needs you". Runs are durable in the workspace file, metered against
   their own budget, and marked interrupted by a restart. Server-side
   under `/api/coordinator`, loopback-only with the usual header.
+- `foolscap doctor` reports real provider, model, voice, and installed-agent
+  readiness without starting an agent or making a network call. JSON output
+  is available for packaging and support checks.
 - **A Linux installer.** `curl -fsSL …/install.sh | sh` picks up your
   Node (22+) or keeps a private one, downloads the checksummed release
   bundle from GitHub Releases, and writes `~/.local/bin/foolscap`.
@@ -34,6 +37,17 @@
 
 ### Fixed
 
+- Coordinator workflow policy is enforced in server state: implementation
+  repairs are bounded to two, a successful edit requires a read-only verdict
+  from a different agent, review repair is bounded to one, and a planning
+  model cannot mark an unfinished workflow complete.
+- Dispatch is serialized per resolved checkout, preventing two agent writers
+  from racing in the same working tree while preserving concurrency across
+  repositories. Concurrent starts of the same task are also atomic.
+- Agent adapters now terminate their full child-process tree on close. Live
+  evidence follows the final validation run, so a green rerun supersedes an
+  earlier red or sandbox-blocked test without hiding unrelated tool errors.
+
 - Spend is honest. Only Claude Code reports cost; every other driver's
   attempts now carry `costUsd: null` and the task is marked as spend
   unknown ("≥ $0.00", "this agent doesn't report cost") instead of
@@ -44,6 +58,11 @@
   has; nothing about the workspace is cached in the browser.
 
 ### Changed
+
+- Coordinator and voice backend model choices use configured allowlists and
+  expose readiness to the UI. Missing local commands are disabled before
+  launch. Coordinator Responses are bounded to 1,200 output tokens; budget
+  status is explicitly observed rather than presented as a provider hard cap.
 
 - The npm package only depends on `ws` at run time; React, marked and
   DOMPurify are build-time (the viewer ships prebuilt in `dist/`), so

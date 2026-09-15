@@ -15,9 +15,9 @@ foolscap does five things, all on your machine:
   work and routes it to your coding agents, which run here. Dispatch is
   asynchronous, so it keeps planning while they work, and every result
   comes back as *foolscap's* evidence — test runs, edited files, the
-  agent's last words — never the agent's claim. Repairs and reviews are
-  dispatched from that evidence; it asks you only when the answer
-  changes the work.
+  agent's last words — never the agent's claim. Foolscap enforces bounded
+  repair and independent-review stages on the server, so the planning
+  model cannot skip them or declare unfinished work complete.
 - **The workspace — context to execution.** Connect repositories and notes,
   explore their file/import/link graph, capture work on a Kanban board, and
   dispatch ready tasks to your agents under budget and concurrency
@@ -63,7 +63,8 @@ five tabs: **overview**, **board** (add and move tasks), **graph**
 routing reasons) and **voice**. **Dispatch ready** fills available fleet capacity using the
 workspace's budget and load policy. "auto" routes to Claude Code first,
 then Codex and OpenCode by load; Devin, Warp and Antigravity run only
-when you name them.
+when you name them. A checkout has one active writer at a time, while
+independent repositories can still use the configured global capacity.
 
 **Voice** is the local BYOK path: set `OPENAI_API_KEY`, open the voice tab
 under Work, and start a conversation. The browser connects to `gpt-live-1` over WebRTC
@@ -71,14 +72,24 @@ through Foolscap's loopback session broker, so the project key never enters
 browser JavaScript. GPT-Live delegates workspace operations to a low-latency
 Responses backend (`gpt-5.6-luna` by default), which calls the same local
 task, search, and coordinator APIs as the visual interface. Override the
-backend with `FOOLSCAP_VOICE_BACKEND_MODEL`. Two of its tools reach the
+backend with `FOOLSCAP_VOICE_BACKEND_MODEL`; use the comma-separated
+`FOOLSCAP_VOICE_BACKEND_MODELS` allowlist to expose choices in the UI.
+Two of its tools reach the
 coordinator: say what needs doing and, once you've said *go*, it starts a
 run; ask *what needs me?* and it reads back the agent queue and any open
 coordinator question, most urgent first.
 
 ```sh
 OPENAI_API_KEY=your_project_key npx foolscap
+npx foolscap doctor
 ```
+
+`foolscap doctor` reads the actual environment and installed commands. It
+reports provider readiness, the exact live/backend models, and whether at
+least two different local-agent families are ready for independent review.
+It exits nonzero while a launch prerequisite is missing; `--json` emits the
+same report for packaging or support scripts. A final voice check still
+requires starting a browser session and granting microphone permission.
 
 ## Install
 
@@ -233,12 +244,15 @@ Two of Astra's primitives are the whole design:
   is what foolscap observed: test commands and their output, files edited,
   errors, the agent's final message, cost. The model reads evidence; it
   is never asked whether the agent succeeded.
-- **The loop runs on evidence.** Red tests or errors: a repair is
-  dispatched on the same task with the failing output attached, at most
-  twice. Green tests with edited files: a review is dispatched to a
-  *different* agent, told to report problems and not fix them. It asks
-  you one question, and only when the answer changes the work; the run
-  shows **needs you** until you answer.
+- **The loop runs on evidence.** Red tests or errors dispatch a repair on
+  the same task with the failing output attached, at most twice. Green
+  tests with edited files dispatch a read-only review to a *different*
+  agent; review repairs are bounded to one and the reviewer must return a
+  machine-readable PASS or CHANGES_REQUESTED verdict. These transitions
+  are enforced by Foolscap's server state. Astra cannot end the run while
+  required repair or review work remains. It asks you one question, and
+  only when the answer changes the work; the run shows **needs you** until
+  you answer.
 
 Every run is durable — each event lands in `~/.foolscap/workspace.json`
 as it happens — and the feed under the composer shows the plan, each
@@ -251,9 +265,14 @@ OPENAI_API_KEY=your_project_key npx foolscap
 
 What leaves your machine: the goal, the brief, search snippets and the
 evidence summaries. Your session archives never do. The coordinator's own
-spend is metered per run from the published prices (default budget $2,
-`budgetUsd` on the run) and shown next to the run; the agents' spend is
-on the task. `FOOLSCAP_COORDINATOR_MODEL` picks another Responses model;
+spend is observed per run from reported token usage and published prices
+(default budget $2, `budgetUsd` on the run) and shown next to the run. Its
+Responses requests are also bounded to 1,200 output tokens. The budget is
+not a provider-side hard cap, and agents that do not report cost remain
+unknown rather than counting as zero. `FOOLSCAP_COORDINATOR_MODEL` selects
+the primary Responses model; `FOOLSCAP_COORDINATOR_MODELS` is a
+comma-separated UI allowlist. A configured fallback is attempted only when
+the first request says the primary model is unavailable.
 `FOOLSCAP_OPENAI_BASE_URL` points at a compatible endpoint.
 
 ## Features
