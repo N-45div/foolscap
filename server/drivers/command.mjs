@@ -19,6 +19,7 @@
  * `FOOLSCAP_<AGENT>="…"` overrides the whole command line.
  */
 import { spawn } from "node:child_process";
+import { terminateProcessTree } from "./process.mjs";
 
 const MAX_OUTPUT = 200_000;
 
@@ -135,14 +136,14 @@ export function createCommandDriver({ template, cwd, log, onFrame }) {
 
   driver.cancel = () => {
     if (child) {
-      child.kill();
+      terminateProcessTree(child);
       onFrame("c2a", { type: "command/cancel" });
       finish({ stopReason: "cancelled" });
     }
   };
 
   driver.close = () => {
-    child?.kill();
+    terminateProcessTree(child);
     if (turn) finish({ stopReason: "cancelled" });
   };
 

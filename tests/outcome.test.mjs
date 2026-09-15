@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { judge, segmentsFor } from "../server/outcome.mjs";
+import { classifyRun, judge, segmentsFor } from "../server/outcome.mjs";
 
 const seg = (tools, next = null) => ({ text: "p", at: undefined, tools, next });
 const tool = (command, result, isError = false) => ({
@@ -22,6 +22,18 @@ test("tests that pass are evidence", () => {
   const v = judge(seg([tool("pnpm vitest run", "Tests  11 passed (11)")]));
   assert.equal(v.verdict, "verified");
   assert.equal(v.passed, true);
+});
+
+test("Node's spec reporter is recognized inside a real ACP result", () => {
+  const output = JSON.stringify({
+    formatted_output: "✔ adds (0.8ms)\nℹ tests 1\nℹ pass 1\nℹ fail 0",
+    exit_code: 0,
+  });
+  assert.deepEqual(classifyRun("npm test", output, false), {
+    tested: true,
+    passed: true,
+    failed: false,
+  });
 });
 
 test("a successful commit is evidence", () => {

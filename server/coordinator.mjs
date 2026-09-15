@@ -219,9 +219,10 @@ class CoordinatorRun {
   updatePolicy(taskId, role, agent, evidence) {
     const policy = this.policy(taskId);
     const observed = evidence.evidence ?? {};
+    const finalTest = evidence.test_runs?.at(-1) ?? null;
     const failed = evidence.attempt_state === "error" || evidence.attempt_state === "exited" ||
-      Boolean(evidence.error) || (observed.testsFailed ?? 0) > 0 || (observed.errors ?? 0) > 0;
-    const validated = (observed.testsPassed ?? 0) > 0;
+      Boolean(evidence.error) || (finalTest ? finalTest.failed : (observed.testsFailed ?? 0) > 0 || (observed.errors ?? 0) > 0);
+    const validated = finalTest ? finalTest.passed : (observed.testsPassed ?? 0) > 0;
     const edited = evidence.edited_files?.length ?? observed.edited ?? 0;
 
     if (role === "review") {

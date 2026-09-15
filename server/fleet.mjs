@@ -113,17 +113,26 @@ const freshEvidence = () => ({
 });
 
 /** Present-tense evidence: read the current turn's tools as they land. */
-function evidenceFor(cell) {
+export function evidenceFor(cell) {
   const ev = freshEvidence();
   if (!cell) return ev;
   const edited = new Set();
+  let nonValidationErrors = 0;
   for (const part of cell.parts) {
     if (part.kind !== "tool") continue;
     const tool = part.tool;
-    if (tool.isError) ev.errors++;
     const run = classifyRun(commandOf(tool), tool.result ?? "", tool.isError);
-    if (run.failed) ev.testsFailed++;
-    else if (run.passed) ev.testsPassed++;
+    if (run.tested) {
+      // Present-tense evidence follows the latest validation run. Agents
+      // often rerun the same command after fixing code or a sandbox issue;
+      // a later green run resolves the earlier red one for this turn.
+      ev.testsFailed = run.failed ? 1 : 0;
+      ev.testsPassed = run.passed ? 1 : 0;
+      ev.errors = nonValidationErrors + (tool.isError ? 1 : 0);
+    } else if (tool.isError) {
+      nonValidationErrors++;
+      ev.errors = nonValidationErrors;
+    }
     const isEdit =
       /^(edit|Edit|Write|MultiEdit|NotebookEdit)$/.test(tool.name) ||
       typeof tool.input.old_string === "string" ||

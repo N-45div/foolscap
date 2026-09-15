@@ -21,6 +21,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnAgent } from "../acp.mjs";
+import { terminateProcessTree } from "./process.mjs";
 import { titleOf } from "../claude-stream.mjs";
 
 const MCP_SERVER = fileURLToPath(new URL("../permission-mcp.mjs", import.meta.url));
@@ -184,7 +185,7 @@ export function createClaudeDriver({ id, cwd, fleetUrl, log, onFrame, onPermissi
   };
 
   driver.close = () => {
-    child?.kill();
+    terminateProcessTree(child);
     turn?.reject(new Error("session closed"));
     turn = null;
     unlink(mcpFile).catch(() => {});

@@ -8,6 +8,7 @@
  * session core never sees JSON-RPC.
  */
 import { spawnAgent } from "../acp.mjs";
+import { terminateProcessTree } from "./process.mjs";
 
 const CLIENT_INFO = { name: "foolscap", title: "foolscap", version: "0.4.0" };
 
@@ -144,7 +145,7 @@ export function createAcpDriver({ spec, cwd, log, onFrame, onPermission }) {
   };
 
   driver.close = () => {
-    child?.kill();
+    terminateProcessTree(child);
     failPending("session closed");
   };
 

@@ -33,16 +33,19 @@ const BUILD_CMD =
 
 const PASS_SIGNAL = [
   /\b(\d+)\s+pass(ed|ing)\b/i,
+  /\bpass(?:ed|ing)?\s*[:=]?\s*[1-9]\d*\b/i,
   /\btests?\s+passed\b/i,
+  /\bfail(?:ed|ing|ures)?\s*[:=]?\s*0\b/i,
   /Test Files\s+\d+\s+passed/i,
   /\b0\s+fail(ed|ing|ures)?\b/i,
   /\bbuild (succeeded|successful|complete)\b/i,
   /\bcompiled successfully\b/i,
-  /^\s*✓/m,
+  /^\s*[✓✔]/m,
 ];
 
 const FAIL_SIGNAL = [
   /\b([1-9]\d*)\s+fail(ed|ing|ures)?\b/i,
+  /\bfail(?:ed|ing|ures)?\s*[:=]?\s*[1-9]\d*\b/i,
   /\bFAILED\b/,
   /^\s*FAIL\b/m,
   /\berror TS\d+/,

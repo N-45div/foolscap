@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Fleet, fleetAgentCatalog } from "../server/fleet.mjs";
+import { Fleet, evidenceFor, fleetAgentCatalog } from "../server/fleet.mjs";
 import { attention } from "../server/attention.mjs";
 import { TranscriptBuilder } from "../server/acp-doc.mjs";
 
@@ -98,6 +98,43 @@ test("red tests put the session at the top of the queue", async () => {
   const a = attention(s.snapshot());
   assert.equal(a.tier, 0);
   assert.match(a.reason, /tests failing/);
+});
+
+test("a final green ACP validation supersedes an earlier sandbox failure", () => {
+  const tool = (title, result, isError = false) => ({
+    kind: "tool",
+    tool: {
+      name: "execute",
+      input: { title },
+      result: JSON.stringify(result),
+      isError,
+    },
+  });
+  const evidence = evidenceFor({
+    parts: [
+      tool("npm test", { formatted_output: "Error: spawn EPERM", exit_code: 1 }, true),
+      {
+        kind: "tool",
+        tool: {
+          name: "Edit",
+          input: { file_path: "math.mjs", old_string: "a - b", new_string: "a + b" },
+          result: "Done",
+          isError: false,
+        },
+      },
+      tool("powershell -Command npm test", {
+        formatted_output: "✔ adds (0.8ms)\nℹ tests 1\nℹ pass 1\nℹ fail 0",
+        exit_code: 0,
+      }),
+    ],
+  });
+
+  assert.deepEqual(evidence, {
+    testsPassed: 1,
+    testsFailed: 0,
+    errors: 0,
+    edited: 1,
+  });
 });
 
 test("a permission request blocks the session until answered", async () => {
