@@ -41,12 +41,16 @@
   repairs are bounded to two, a successful edit requires a read-only verdict
   from a different agent, review repair is bounded to one, and a planning
   model cannot mark an unfinished workflow complete.
-- Dispatch is serialized per resolved checkout, preventing two agent writers
+- Dispatch is serialized per Git worktree root, preventing two agent writers
   from racing in the same working tree while preserving concurrency across
   repositories. Concurrent starts of the same task are also atomic.
 - Agent adapters now terminate their full child-process tree on close. Live
-  evidence follows the final validation run, so a green rerun supersedes an
-  earlier red or sandbox-blocked test without hiding unrelated tool errors.
+  evidence follows the latest run in each validation family, so a green test
+  rerun supersedes an earlier red or sandbox-blocked test while a passing build
+  cannot erase failing tests or unrelated tool errors.
+- Validation-only repairs preserve earlier edit evidence. Independent review
+  treats multiple transports for one agent as one family, and accepts only a
+  final standalone, non-contradictory review verdict.
 
 - Spend is honest. Only Claude Code reports cost; every other driver's
   attempts now carry `costUsd: null` and the task is marked as spend
