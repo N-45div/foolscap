@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { handleWorkspaceApi, synchronizedState } from "../server/workspace-api.mjs";
+import { handleWorkspaceApi, launchWorkspaceTask, synchronizedState } from "../server/workspace-api.mjs";
 import { FakeFleet } from "./fake-fleet.mjs";
 import {
   attachTaskAttempt,
@@ -282,6 +282,23 @@ test("concurrent starts cannot launch the same task twice", async () => {
   assert.equal(fleet.list().length, 1);
   const state = await readWorkspace(file, root);
   assert.equal(state.tasks[0].attempts.length, 1);
+});
+
+test("nested directories in one checkout share the writer lock", async () => {
+  const root = await mkdtemp(join(tmpdir(), "foolscap-workspace-lock-"));
+  await mkdir(join(root, "src"));
+  const file = join(root, "workspace.json");
+  let state = createTask(defaultWorkspace(root), { title: "Root writer", budgetUsd: 3 });
+  state = createTask(state, { title: "Nested writer", budgetUsd: 3 });
+  await writeWorkspace(state, file);
+  const fleet = new FakeFleet();
+
+  await launchWorkspaceTask({ taskId: state.tasks[0].id, cwd: root, fleet, file, root });
+  await assert.rejects(
+    () => launchWorkspaceTask({ taskId: state.tasks[1].id, cwd: join(root, "src"), fleet, file, root }),
+    /workspace is busy/,
+  );
+  assert.equal(fleet.list().length, 1);
 });
 
 test("auto never routes to cloud or unverified agents unless named", () => {
