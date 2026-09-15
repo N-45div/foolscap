@@ -87,6 +87,12 @@
     color: var(--ink);
     font-family: ui-sans-serif, system-ui, sans-serif;
     overflow-x: clip;
+    color-scheme: dark;
+  }
+
+  * {
+    scrollbar-color: var(--rule-strong) transparent;
+    scrollbar-width: thin;
   }
 
   .tnum {
