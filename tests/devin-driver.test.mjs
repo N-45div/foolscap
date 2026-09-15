@@ -92,13 +92,15 @@ after(async () => {
   for (const s of servers) s.close();
 });
 
-test("without an API key the session fails to start with a clear message", async () => {
+test("without an API key Devin is refused before a session starts", () => {
   delete process.env.DEVIN_API_KEY;
   const fleet = new Fleet({ record: false });
   fleets.push(fleet);
-  const s = fleet.get(fleet.launch({ agent: "devin", name: "nokey" }).id);
-  await until(() => s.status === "error");
-  assert.match(s.error, /DEVIN_API_KEY/);
+  assert.throws(
+    () => fleet.launch({ agent: "devin", name: "nokey" }),
+    /DEVIN_API_KEY/,
+  );
+  assert.equal(fleet.list().length, 0);
 });
 
 test("a Devin session runs as a turn: question blocks, a text answer unblocks, the PR lands in the document", async () => {
