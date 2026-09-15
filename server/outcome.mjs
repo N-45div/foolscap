@@ -93,12 +93,20 @@ export function commandOf(tool) {
  * green or red run looks like.
  */
 export function classifyRun(cmd, output, isError = false) {
-  const testish = TEST_CMD.test(cmd) || BUILD_CMD.test(cmd);
+  const testish = validationKind(cmd);
   if (!testish) return { tested: false, passed: false, failed: false };
   const text = output ?? "";
   if (any(FAIL_SIGNAL, text)) return { tested: true, passed: false, failed: true };
   if (any(PASS_SIGNAL, text) && !isError) return { tested: true, passed: true, failed: false };
   return { tested: true, passed: false, failed: false };
+}
+
+/** Validation families are tracked independently so a green build cannot
+    erase a red test run (while a later test rerun can replace it). */
+export function validationKind(cmd) {
+  if (TEST_CMD.test(cmd)) return "test";
+  if (BUILD_CMD.test(cmd)) return "build";
+  return null;
 }
 
 /**

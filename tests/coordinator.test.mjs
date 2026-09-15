@@ -196,6 +196,91 @@ test("the server blocks completion until a different agent returns a review verd
   assert.equal(saved.workflow[taskId].phase, "complete");
 });
 
+test("a validation-only repair can carry earlier implementation edits into review", async () => {
+  const taskId = "validation-only";
+  const script = (body, index) => {
+    const outputs = outputsIn(body);
+    if (index === 0) return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true })] };
+    if (index === 1) {
+      assert.equal(outputs[0].output.policy.phase, "needs-repair");
+      return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true })] };
+    }
+    if (index === 2) {
+      assert.equal(outputs[0].output.policy.phase, "needs-review");
+      return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true })] };
+    }
+    if (index === 3) {
+      assert.equal(outputs[0].output.policy.phase, "complete");
+      return { output: [message("Validated and reviewed.")] };
+    }
+    throw new Error(`unexpected request ${index}`);
+  };
+  const { coordinator, fleet, file, dir } = await setup(script);
+  let state = createTask(await readWorkspace(file, dir), { title: "Validate existing edit", budgetUsd: 3 });
+  state.tasks[0].id = taskId;
+  await writeWorkspace(state, file);
+
+  const run = await coordinator.start({ goal: "validate the implementation" });
+  const implementation = await fleet.session(1);
+  implementation.finish({
+    testsPassed: 0,
+    edited: 1,
+    parts: [{ kind: "tool", tool: { name: "Edit", input: { file_path: "src/a.ts" }, result: "ok", isError: false } }],
+  });
+  const validation = await fleet.session(2);
+  validation.finish({
+    testsPassed: 1,
+    edited: 0,
+    parts: [{ kind: "tool", tool: { name: "Bash", input: { command: "npm test" }, result: "5 passed", isError: false } }],
+  });
+  const review = await fleet.session(3);
+  review.finish({ testsPassed: 0, edited: 0, parts: [{ kind: "text", text: "FOOLSCAP_REVIEW: PASS" }] });
+  await coordinator.settled(run.id);
+
+  const saved = (await readWorkspace(file, dir)).runs.find((item) => item.id === run.id);
+  assert.equal(saved.status, "done");
+  assert.equal(saved.workflow[taskId].lastWriterAgent, implementation.agent);
+});
+
+test("passing validation does not hide an unrelated tool error", async () => {
+  const taskId = "tool-error";
+  const script = (body, index) => {
+    const outputs = outputsIn(body);
+    if (index === 0) return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true })] };
+    if (index === 1) {
+      assert.equal(outputs[0].output.evidence.errors, 1);
+      assert.equal(outputs[0].output.policy.phase, "needs-repair");
+      return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true })] };
+    }
+    if (index === 2) return { output: [call("dispatch_task", { task_id: taskId, agent: null, instructions: null }, { async: true })] };
+    if (index === 3) return { output: [message("Repaired and reviewed.")] };
+    throw new Error(`unexpected request ${index}`);
+  };
+  const { coordinator, fleet, file, dir } = await setup(script);
+  let state = createTask(await readWorkspace(file, dir), { title: "Handle a tool error", budgetUsd: 3 });
+  state.tasks[0].id = taskId;
+  await writeWorkspace(state, file);
+
+  const run = await coordinator.start({ goal: "handle the failed generator" });
+  const implementation = await fleet.session(1);
+  implementation.finish({
+    testsPassed: 1,
+    errors: 1,
+    edited: 1,
+    parts: [
+      { kind: "tool", tool: { name: "Edit", input: { file_path: "src/a.ts" }, result: "ok", isError: false } },
+      { kind: "tool", tool: { name: "Bash", input: { command: "generate-schema" }, result: "permission denied", isError: true } },
+      { kind: "tool", tool: { name: "Bash", input: { command: "npm test" }, result: "5 passed", isError: false } },
+    ],
+  });
+  const repair = await fleet.session(2);
+  repair.finish({ testsPassed: 1, errors: 0, edited: 1 });
+  const review = await fleet.session(3);
+  review.finish({ testsPassed: 0, edited: 0, parts: [{ kind: "text", text: "FOOLSCAP_REVIEW: PASS" }] });
+  await coordinator.settled(run.id);
+  assert.equal((await readWorkspace(file, dir)).runs.find((item) => item.id === run.id).status, "done");
+});
+
 test("ask_user parks the run as needs-you until a person answers", async () => {
   const script = (body, index) => {
     if (index === 0) return { output: [call("ask_user", { question: "Keep the public API unchanged?" })] };

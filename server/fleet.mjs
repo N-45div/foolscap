@@ -31,7 +31,7 @@ import { TranscriptBuilder } from "./acp-doc.mjs";
 import { ClaudeStreamBuilder } from "./claude-stream.mjs";
 import { DevinBuilder } from "./devin-doc.mjs";
 import { CommandBuilder } from "./command-doc.mjs";
-import { classifyRun, commandOf } from "./outcome.mjs";
+import { classifyRun, commandOf, validationKind } from "./outcome.mjs";
 import { createAcpDriver } from "./drivers/acp.mjs";
 import { createClaudeDriver } from "./drivers/claude.mjs";
 import { createDevinDriver } from "./drivers/devin.mjs";
@@ -118,17 +118,19 @@ export function evidenceFor(cell) {
   if (!cell) return ev;
   const edited = new Set();
   let nonValidationErrors = 0;
+  const validations = new Map();
   for (const part of cell.parts) {
     if (part.kind !== "tool") continue;
     const tool = part.tool;
-    const run = classifyRun(commandOf(tool), tool.result ?? "", tool.isError);
+    const command = commandOf(tool);
+    const run = classifyRun(command, tool.result ?? "", tool.isError);
     if (run.tested) {
-      // Present-tense evidence follows the latest validation run. Agents
-      // often rerun the same command after fixing code or a sandbox issue;
-      // a later green run resolves the earlier red one for this turn.
-      ev.testsFailed = run.failed ? 1 : 0;
-      ev.testsPassed = run.passed ? 1 : 0;
-      ev.errors = nonValidationErrors + (tool.isError ? 1 : 0);
+      // A later run replaces an earlier run of the same family. Test and
+      // build evidence stay independent, so building cannot clear red tests.
+      validations.set(validationKind(command), { ...run, isError: tool.isError });
+      ev.testsFailed = [...validations.values()].filter((item) => item.failed).length;
+      ev.testsPassed = [...validations.values()].filter((item) => item.passed).length;
+      ev.errors = nonValidationErrors + [...validations.values()].filter((item) => item.isError).length;
     } else if (tool.isError) {
       nonValidationErrors++;
       ev.errors = nonValidationErrors;

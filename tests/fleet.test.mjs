@@ -137,6 +137,18 @@ test("a final green ACP validation supersedes an earlier sandbox failure", () =>
   });
 });
 
+test("a green build does not erase an unresolved red test run", () => {
+  const evidence = evidenceFor({
+    parts: [
+      { kind: "tool", tool: { name: "Bash", input: { command: "npm test" }, result: "1 failed", isError: true } },
+      { kind: "tool", tool: { name: "Bash", input: { command: "npm run build" }, result: "build succeeded", isError: false } },
+    ],
+  });
+  assert.equal(evidence.testsFailed, 1);
+  assert.equal(evidence.testsPassed, 1);
+  assert.equal(evidence.errors, 1);
+});
+
 test("a permission request blocks the session until answered", async () => {
   const { s } = await one();
   s.prompt("ask before writing");

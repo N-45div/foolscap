@@ -196,6 +196,7 @@ class CoordinatorRun {
       reviewRepairs: 0,
       reviews: 0,
       lastWriterAgent: null,
+      implementationEdited: false,
       lastEvidence: null,
     };
     return this.run.workflow[taskId];
@@ -219,10 +220,9 @@ class CoordinatorRun {
   updatePolicy(taskId, role, agent, evidence) {
     const policy = this.policy(taskId);
     const observed = evidence.evidence ?? {};
-    const finalTest = evidence.test_runs?.at(-1) ?? null;
     const failed = evidence.attempt_state === "error" || evidence.attempt_state === "exited" ||
-      Boolean(evidence.error) || (finalTest ? finalTest.failed : (observed.testsFailed ?? 0) > 0 || (observed.errors ?? 0) > 0);
-    const validated = finalTest ? finalTest.passed : (observed.testsPassed ?? 0) > 0;
+      Boolean(evidence.error) || (observed.testsFailed ?? 0) > 0 || (observed.errors ?? 0) > 0;
+    const validated = (observed.testsPassed ?? 0) > 0 && (observed.testsFailed ?? 0) === 0;
     const edited = evidence.edited_files?.length ?? observed.edited ?? 0;
 
     if (role === "review") {
@@ -247,8 +247,12 @@ class CoordinatorRun {
       const reviewRepair = role === "review-repair";
       if (role === "repair") policy.implementationRepairs += 1;
       if (reviewRepair) policy.reviewRepairs += 1;
-      policy.lastWriterAgent = agent;
-      if (failed || !validated || edited === 0) {
+      if (edited > 0) {
+        policy.lastWriterAgent = agent;
+        policy.implementationEdited = true;
+      }
+      const hasRequiredEdit = reviewRepair ? edited > 0 : policy.implementationEdited === true;
+      if (failed || !validated || !hasRequiredEdit) {
         const exhausted = reviewRepair
           ? policy.reviewRepairs >= MAX_REVIEW_REPAIRS
           : policy.implementationRepairs >= MAX_IMPLEMENTATION_REPAIRS;
