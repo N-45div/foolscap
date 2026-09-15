@@ -57,6 +57,9 @@ export const FLEET_AGENTS = {
 
 const TRANSPORT = { claude: "native", devin: "cloud", command: "command", acp: "acp" };
 
+/** Multiple transports for one underlying agent are one review family. */
+export const agentFamily = (id) => id === "claude-acp" ? "claude" : id;
+
 function commandExists(command, env = process.env) {
   if (!command) return false;
   const names = process.platform === "win32"

@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createCoordinator, costOf, TOOLS } from "../server/coordinator.mjs";
+import { createCoordinator, costOf, reviewVerdict, TOOLS } from "../server/coordinator.mjs";
 import { handleCoordinatorApi } from "../server/coordinator-api.mjs";
 import { createTask, defaultWorkspace, readWorkspace, writeWorkspace } from "../server/workspace.mjs";
 import { FakeFleet } from "./fake-fleet.mjs";
@@ -170,7 +170,7 @@ test("the server blocks completion until a different agent returns a review verd
     }
     if (index === 3) {
       assert.match(body.input[0].content, /needs-review/);
-      return { output: [call("dispatch_task", { task_id: taskId, agent: "claude", instructions: null }, { async: true, id: "bad-review" })] };
+      return { output: [call("dispatch_task", { task_id: taskId, agent: "claude-acp", instructions: null }, { async: true, id: "bad-review" })] };
     }
     if (index === 4) {
       assert.match(outputs[0].output.error, /different agent/);
@@ -194,6 +194,15 @@ test("the server blocks completion until a different agent returns a review verd
   assert.equal(saved.status, "done");
   assert.equal(saved.policyNudges, 1);
   assert.equal(saved.workflow[taskId].phase, "complete");
+});
+
+test("review verdicts come from the final standalone, non-contradictory marker", () => {
+  assert.equal(
+    reviewVerdict("The requested marker was FOOLSCAP_REVIEW: PASS. I found a regression.\nFOOLSCAP_REVIEW: CHANGES_REQUESTED"),
+    "CHANGES_REQUESTED",
+  );
+  assert.equal(reviewVerdict("FOOLSCAP_REVIEW: PASS\nFOOLSCAP_REVIEW: CHANGES_REQUESTED"), null);
+  assert.equal(reviewVerdict("Looks bounded.\nFOOLSCAP_REVIEW: PASS"), "PASS");
 });
 
 test("a validation-only repair can carry earlier implementation edits into review", async () => {
@@ -234,6 +243,7 @@ test("a validation-only repair can carry earlier implementation edits into revie
     parts: [{ kind: "tool", tool: { name: "Bash", input: { command: "npm test" }, result: "5 passed", isError: false } }],
   });
   const review = await fleet.session(3);
+  assert.equal(review.agent, "codex");
   review.finish({ testsPassed: 0, edited: 0, parts: [{ kind: "text", text: "FOOLSCAP_REVIEW: PASS" }] });
   await coordinator.settled(run.id);
 

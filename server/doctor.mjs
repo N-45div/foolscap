@@ -1,14 +1,12 @@
 import { DEFAULT_MODEL, configuredModels } from "./coordinator.mjs";
-import { fleetAgentCatalog } from "./fleet.mjs";
+import { agentFamily, fleetAgentCatalog } from "./fleet.mjs";
 import { LIVE_MODEL, voiceModels } from "./live-api.mjs";
-
-const familyOf = (id) => id === "claude-acp" ? "claude" : id;
 
 /** Read launch prerequisites without starting an agent or making a network call. */
 export function readinessReport(env = process.env) {
   const agents = fleetAgentCatalog(env);
   const readyFamilies = [...new Set(
-    agents.filter((agent) => agent.status === "ready").map((agent) => familyOf(agent.id)),
+    agents.filter((agent) => agent.status === "ready").map((agent) => agentFamily(agent.id)),
   )];
   const providerReady = Boolean(env.OPENAI_API_KEY);
   const coordinatorModel = env.FOOLSCAP_COORDINATOR_MODEL || DEFAULT_MODEL;

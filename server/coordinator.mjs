@@ -23,7 +23,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { classifyRun, commandOf } from "./outcome.mjs";
-import { FLEET_AGENTS } from "./fleet.mjs";
+import { agentFamily, FLEET_AGENTS } from "./fleet.mjs";
 import {
   createTask,
   mutateWorkspace,
@@ -128,6 +128,16 @@ function parseArgs(raw) {
   }
 }
 
+/** Accept only a final standalone review marker. Conflicting standalone
+    markers are invalid; markers quoted inside prose do not count. */
+export function reviewVerdict(message) {
+  const lines = String(message ?? "").trim().split(/\r?\n/);
+  const marker = /^FOOLSCAP_REVIEW:\s*(PASS|CHANGES_REQUESTED)$/i;
+  const matches = lines.map((line) => marker.exec(line.trim())?.[1]?.toUpperCase()).filter(Boolean);
+  const final = marker.exec(lines.at(-1)?.trim() ?? "")?.[1]?.toUpperCase() ?? null;
+  return final && new Set(matches).size === 1 ? final : null;
+}
+
 function isEdit(tool) {
   return (
     /^(edit|Edit|Write|MultiEdit|NotebookEdit)$/.test(tool.name) ||
@@ -227,7 +237,7 @@ class CoordinatorRun {
 
     if (role === "review") {
       policy.reviews += 1;
-      const verdict = /FOOLSCAP_REVIEW:\s*(PASS|CHANGES_REQUESTED)/i.exec(evidence.last_message ?? "")?.[1]?.toUpperCase() ?? null;
+      const verdict = reviewVerdict(evidence.last_message);
       if (failed || edited > 0 || verdict === "CHANGES_REQUESTED") {
         if (policy.reviewRepairs >= MAX_REVIEW_REPAIRS) {
           policy.phase = "failed";
@@ -444,7 +454,8 @@ class CoordinatorRun {
     if (role === "review" && policy.reviews >= MAX_REVIEW_ATTEMPTS) throw new Error("review attempt limit reached");
 
     const requested = args.agent ?? "auto";
-    if (role === "review" && requested !== "auto" && requested !== null && requested === policy.lastWriterAgent) {
+    const writerFamily = policy.lastWriterAgent ? agentFamily(policy.lastWriterAgent) : null;
+    if (role === "review" && requested !== "auto" && requested !== null && agentFamily(requested) === writerFamily) {
       throw new Error("review must run on a different agent from the writer");
     }
     const policyInstruction = role === "review"
@@ -462,7 +473,9 @@ class CoordinatorRun {
       file,
       root,
       fleetUrl: this.run.fleetUrl,
-      excludedAgents: role === "review" && policy.lastWriterAgent ? [policy.lastWriterAgent] : [],
+      excludedAgents: role === "review" && writerFamily
+        ? this.ctx.agents.filter((candidate) => agentFamily(candidate.id) === writerFamily).map((candidate) => candidate.id)
+        : [],
       purpose: role,
       coordinatorRunId: this.run.id,
       onLaunch: (id) => {
