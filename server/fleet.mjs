@@ -403,15 +403,23 @@ export class AgentSession extends EventEmitter {
     if (!["checking", "working", "blocked"].includes(this.status)) return;
     this.status = "done";
     this.doneAt = now();
+    this.emit("event", {
+      type: "turn",
+      verdict: this.verified?.verdict ?? null,
+      stopReason: this.stopReason,
+      ms: this.turnStartedAt ? Date.now() - Date.parse(this.turnStartedAt) : 0,
+    });
     if (this.queue.length) {
       const gate = this.gate();
       if (gate.open) {
         const next = this.queue.shift();
         this.log(`queue: sending the next prompt (${gate.reason})`);
+        this.emit("event", { type: "queue-sent", reason: gate.reason });
         this.prompt(next);
         return;
       }
       this.held = { reason: gate.reason };
+      this.emit("event", { type: "held", reason: gate.reason });
     }
     this.changed();
   }
@@ -463,6 +471,7 @@ export class AgentSession extends EventEmitter {
     const asked = this.builder.cells[0]?.prompt ?? this.name;
     const subject = `${this.label}: ${asked.split(/\r?\n/)[0]}`.slice(0, 72);
     const sha = await mergeWorktree(this.worktree, { message: subject });
+    this.emit("event", { type: "merged", sha, ...(this.changes ?? {}) });
     await removeWorktree(this.worktree);
     this.worktree = null;
     this.merged = sha;
@@ -647,6 +656,7 @@ export class Fleet extends EventEmitter {
     });
     s.queue.push(...queue.map((q) => String(q).trim()).filter(Boolean));
     s.on("change", () => this.emit("change", s));
+    s.on("event", (event) => this.emit("event", { ...event, id, name: s.name, agent: s.label }));
     this.sessions.set(id, s);
     this.emit("change", s);
     s.start()
