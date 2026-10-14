@@ -1,7 +1,7 @@
 /** The new-task line: which repo, which agent, what to do, and what comes after. */
 import { useEffect, useState } from "react";
 import { api, type AppState } from "./api";
-import { Mic } from "./icons";
+import { MicButton } from "./voice/MicButton";
 
 const PICK = "__pick__";
 
@@ -14,6 +14,7 @@ export function Composer({ state }: { state: AppState }) {
   const [prompt, setPrompt] = useState("");
   const [thens, setThens] = useState<string[]>([]);
   const [ownCopy, setOwnCopy] = useState(true);
+  const [heard, setHeard] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -92,10 +93,13 @@ export function Composer({ state }: { state: AppState }) {
             }
           }}
         />
-        <button type="button" className="square" disabled title="Voice comes with foolscap Cloud, soon" aria-label="Voice (coming with foolscap Cloud)">
-          <Mic />
-        </button>
+        <MicButton
+          voice={state.voice}
+          onPartial={setHeard}
+          onText={(text) => setPrompt((p) => (p.trim() ? `${p.trim()} ${text}` : text))}
+        />
       </div>
+      {heard && <span className="muted" style={{ fontSize: 12, fontStyle: "italic" }}>Heard: {heard}</span>}
       {thens.length > 0 && (
         <div className="then">
           {thens.map((t, i) => (

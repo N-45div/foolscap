@@ -12,7 +12,7 @@
  * pages talk to it over IPC only; the relay is the single loopback
  * HTTP listener, guarded by a per-run token.
  */
-import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, screen, shell } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, globalShortcut, ipcMain, nativeImage, nativeTheme, screen, session as electronSession, shell } from "electron";
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -30,6 +30,7 @@ import { createNotifier } from "./notify.mjs";
 import { startRelay } from "./relay.mjs";
 import { Settings } from "./settings.mjs";
 import { trayPixels } from "./tray-icon.mjs";
+import { VoiceClient } from "./voice.mjs";
 
 const APP_ID = "dev.foolscap.app";
 // Windows routes notification button clicks to the app through this COM id.
@@ -46,6 +47,7 @@ let licence;
 let fleet;
 let external;
 let journal;
+let voice;
 let awayFrom = null; // when the panel was last put away
 let away = null; // the digest shown after a while away, until dismissed
 let hookServer = null;
@@ -74,6 +76,7 @@ function snapshot() {
     licence: licence.status(),
     hooks: { on: Boolean(settings.get().terminalSessions), error: hookError },
     today: digest(today(journal.events)),
+    voice: voice.status(),
     away,
     counts: { needs, working },
     platform: process.platform,
@@ -360,6 +363,9 @@ function registerIpc() {
     session(id).answerPermission(optionId, text);
     journal.add({ type: "answered", from: "panel", id });
   });
+  handle("voice:start", async () => ({ session: await voice.start() }));
+  handle("voice:part", async (id, index, wav) => ({ part: await voice.part(id, index, wav) }));
+  handle("voice:finish", async (id, body) => ({ result: await voice.finish(id, body) }));
   handle("digest:dismiss", () => {
     away = null;
   });
@@ -465,6 +471,12 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    // The microphone is for foolscap's own pages, and nothing else.
+    const ours = (url) => url.startsWith("file://") || (DEV_URL !== null && url.startsWith(DEV_URL));
+    electronSession.defaultSession.setPermissionRequestHandler((contents, permission, callback) => {
+      callback(permission === "media" && ours(contents.getURL()));
+    });
+    electronSession.defaultSession.setPermissionCheckHandler((contents, permission) => permission === "media" && ours(contents?.getURL() ?? ""));
     await mkdir(app.getPath("userData"), { recursive: true });
     settings = new Settings(join(app.getPath("userData"), "settings.json"));
     await settings.load();
@@ -473,6 +485,7 @@ if (!app.requestSingleInstanceLock()) {
     const polar = JSON.parse(await readFile(join(HERE, "polar.json"), "utf8"));
     licence = new Licence({ file: join(app.getPath("userData"), "licence.json"), config: polar, packaged: app.isPackaged });
     await licence.load();
+    voice = new VoiceClient({ config: JSON.parse(await readFile(join(HERE, "cloud.json"), "utf8")), licence });
     const recheck = () => licence.validate().then(pushState).catch((err) => log(`licence check: ${err.message}`));
     recheck();
     setInterval(recheck, 6 * 60 * 60 * 1000).unref();

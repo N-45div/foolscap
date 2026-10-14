@@ -100,6 +100,7 @@ export interface AppState {
   licence: Licence;
   hooks: { on: boolean; error: string | null };
   today: Digest;
+  voice: { available: boolean; reason: string | null };
   away: (Digest & { minutes: number }) | null;
   counts: { needs: number; working: number };
   platform: string;
@@ -132,6 +133,9 @@ export interface Bridge {
   hooksEnable(): Result;
   hooksDisable(): Result;
   dismissDigest(): Result;
+  voiceStart(): Result<{ session: { id: string; maxSeconds: number } }>;
+  voicePart(id: string, index: number, wav: ArrayBuffer): Result<{ part: { transcript: string; seconds: number; alternates?: string[] } }>;
+  voiceFinish(id: string, body: { transcript: string; audioSeconds: number; alternates?: string[] }): Result<{ result: { text: string; words: number } }>;
   panelHeight(height: number): void;
   openFull(focusId?: string): void;
   hidePanel(): void;
