@@ -1,6 +1,6 @@
 /** The tray panel: your move on top, the agents' move below, the next task at the bottom. */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { api, type AppState, type Licence, type Session, type Settings } from "./api";
+import { api, duration, type AppState, type Licence, type Session, type Settings } from "./api";
 import { Card, Quiet } from "./Card";
 import { Composer } from "./Composer";
 import { Bell, BellOff, Expand, Gear, Sheet } from "./icons";
@@ -123,16 +123,42 @@ export function SettingsSheet({ settings, licence, hooks }: { settings: Settings
   );
 }
 
-function today(iso: string | null) {
-  return iso ? new Date(iso).toDateString() === new Date().toDateString() : false;
+/** While you were away: only what the journal shows happened. */
+export function Away({ state }: { state: AppState }) {
+  const a = state.away;
+  if (!a) return null;
+  const lines: string[] = [];
+  if (a.green) lines.push(`${a.green} turn${a.green === 1 ? "" : "s"} finished green, checked by foolscap.`);
+  if (a.queueSent) lines.push(`${a.queueSent} queued prompt${a.queueSent === 1 ? "" : "s"} went out, each after green tests.`);
+  if (a.red) lines.push(`${a.red} went red: ${a.redNames.join(", ")}.`);
+  if (a.held) lines.push(`${a.held} next prompt${a.held === 1 ? " is" : "s are"} held for you.`);
+  if (a.errors) lines.push(`${a.errors} turn${a.errors === 1 ? "" : "s"} ended with an error.`);
+  if (a.merged) lines.push(`${a.merged} merged.`);
+  if (a.agentMs) lines.push(`${duration(a.agentMs)} of agent time.`);
+  return (
+    <div className="calm" style={{ borderBottom: "1px solid var(--line)" }}>
+      <div className="section-head" style={{ padding: 0 }}>
+        <h2>While you were away · {duration(a.minutes * 60_000)}</h2>
+        <button className="btn quiet" style={{ height: 24 }} onClick={() => api().dismissDigest()}>Dismiss</button>
+      </div>
+      <ul className="queue" style={{ fontSize: 13, lineHeight: "19px", color: "var(--ink)" }}>
+        {lines.map((line) => (
+          <li key={line} style={{ display: "block" }}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function Footer({ state, onFull }: { state: AppState; onFull: () => void }) {
-  const finished = state.sessions.filter((s) => today(s.doneAt)).length;
-  const green = state.sessions.filter((s) => today(s.doneAt) && s.verified?.verdict === "green").length;
+  const t = state.today;
+  const parts = [];
+  if (t.merged) parts.push(`${t.merged} merged`);
+  if (t.green) parts.push(`${t.green} green`);
+  if (t.agentMs) parts.push(`${duration(t.agentMs)} agent time`);
   return (
     <footer className="foot">
-      <span>{finished ? `Today: ${finished} finished · ${green} green` : "foolscap"}</span>
+      <span>{parts.length ? `Today: ${parts.join(" · ")}` : "foolscap"}</span>
       <div className="right">
         <button className="btn quiet" style={{ height: 28, padding: "0 8px" }} onClick={onFull}>
           <Expand /> Full view <kbd>Ctrl⇧Space</kbd>
@@ -179,6 +205,7 @@ export function Panel({ state, focus }: { state: AppState; focus: string | null 
     <div className="panel" ref={root}>
       <Header state={state} onSettings={() => setSettingsOpen(!settingsOpen)} />
       <div className="rule" />
+      <Away state={state} />
       {yours.length ? (
         <>
           <div className="section-head">

@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { rank } from "../../server/attention.mjs";
 import { ExternalSessions } from "../../server/external.mjs";
 import { Fleet, fleetAgentCatalog } from "../../server/fleet.mjs";
+import { Journal, digest, today } from "../../server/journal.mjs";
 import * as claudeHooks from "./claude-hooks.mjs";
 import { startHookServer } from "./hook-server.mjs";
 import { Licence } from "./licence.mjs";
@@ -44,6 +45,9 @@ let settings;
 let licence;
 let fleet;
 let external;
+let journal;
+let awayFrom = null; // when the panel was last put away
+let away = null; // the digest shown after a while away, until dismissed
 let hookServer = null;
 let hookError = null;
 let tray = null;
@@ -69,6 +73,8 @@ function snapshot() {
     settings: { ...settings.get(), hookToken: undefined },
     licence: licence.status(),
     hooks: { on: Boolean(settings.get().terminalSessions), error: hookError },
+    today: digest(today(journal.events)),
+    away,
     counts: { needs, working },
     platform: process.platform,
   };
@@ -188,6 +194,9 @@ function createPanel() {
   panel.on("blur", () => {
     if (!panel.webContents.isDevToolsOpened()) panel.hide();
   });
+  panel.on("hide", () => {
+    awayFrom = Date.now();
+  });
   loadView(panel, "panel");
 }
 
@@ -211,7 +220,17 @@ function placePanel() {
   panel.setPosition(x, y);
 }
 
+/** Ten minutes or more away: summarise what happened meanwhile, if anything did. */
+const AWAY_MS = 10 * 60_000;
+function noteReturn() {
+  if (!awayFrom || Date.now() - awayFrom < AWAY_MS) return;
+  const d = digest(journal.since(new Date(awayFrom).toISOString()));
+  const happened = d.green + d.red + d.errors + d.queueSent + d.held + d.merged;
+  if (happened) away = { ...d, minutes: Math.round((Date.now() - awayFrom) / 60_000) };
+}
+
 function showPanel() {
+  noteReturn();
   if (!panel || panel.isDestroyed()) createPanel();
   placePanel();
   panel.show();
@@ -337,7 +356,13 @@ function registerIpc() {
     await settings.addRepo(cwd);
     return { session: await fleet.launchTask({ agent, cwd, prompt: prompt.trim(), queue, worktree }) };
   });
-  handle("task:answer", (id, optionId, text) => session(id).answerPermission(optionId, text));
+  handle("task:answer", (id, optionId, text) => {
+    session(id).answerPermission(optionId, text);
+    journal.add({ type: "answered", from: "panel", id });
+  });
+  handle("digest:dismiss", () => {
+    away = null;
+  });
   handle("task:prompt", (id, text) => {
     const s = session(id);
     if (s.status === "idle" || s.status === "done") s.prompt(String(text ?? "").trim());
@@ -443,6 +468,7 @@ if (!app.requestSingleInstanceLock()) {
     await mkdir(app.getPath("userData"), { recursive: true });
     settings = new Settings(join(app.getPath("userData"), "settings.json"));
     await settings.load();
+    journal = await new Journal(join(app.getPath("userData"), "journal.jsonl")).load();
 
     const polar = JSON.parse(await readFile(join(HERE, "polar.json"), "utf8"));
     licence = new Licence({ file: join(app.getPath("userData"), "licence.json"), config: polar, packaged: app.isPackaged });
@@ -460,10 +486,12 @@ if (!app.requestSingleInstanceLock()) {
     const notify = createNotifier({
       find: (id) => fleet.get(id) ?? external.get(id),
       closeTask,
+      record: (event) => journal.add(event),
       getSettings: () => settings.get(),
       onOpen: openSession,
       log,
     });
+    fleet.on("event", (event) => journal.add(event));
     for (const source of [fleet, external]) {
       source.on("change", (s) => {
         notify(s);

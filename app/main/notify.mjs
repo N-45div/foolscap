@@ -13,7 +13,7 @@
  */
 import { Notification } from "electron";
 
-export function createNotifier({ find, closeTask, getSettings, onOpen, log }) {
+export function createNotifier({ find, closeTask, record, getSettings, onOpen, log }) {
   const last = new Map(); // session id → key of what we last told the person
   const live = new Map(); // keep shown notifications referenced until clicked
 
@@ -94,6 +94,7 @@ export function createNotifier({ find, closeTask, getSettings, onOpen, log }) {
           const current = find(s.id);
           if (current?.pendingPermission?.requestId !== p.requestId) return;
           current.answerPermission(index === 0 ? allow : reject);
+          record?.({ type: "answered", from: "notification", id: s.id });
           log?.(`answered ${index === 0 ? "approve" : "deny"} from the notification`);
         },
       });

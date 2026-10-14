@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("foolscap", {
   hooksPlan: call("hooks:plan"),
   hooksEnable: call("hooks:enable"),
   hooksDisable: call("hooks:disable"),
+  dismissDigest: call("digest:dismiss"),
   panelHeight: (height) => ipcRenderer.send("panel:height", height),
   openFull: (focusId) => ipcRenderer.send("view:full", focusId),
   hidePanel: () => ipcRenderer.send("view:hidePanel"),

@@ -81,12 +81,26 @@ export interface Licence {
   offline: boolean;
 }
 
+export interface Digest {
+  green: number;
+  red: number;
+  redNames: string[];
+  errors: number;
+  queueSent: number;
+  held: number;
+  merged: number;
+  answeredFromNotifications: number;
+  agentMs: number;
+}
+
 export interface AppState {
   sessions: Session[];
   agents: Agent[];
   settings: Settings;
   licence: Licence;
   hooks: { on: boolean; error: string | null };
+  today: Digest;
+  away: (Digest & { minutes: number }) | null;
   counts: { needs: number; working: number };
   platform: string;
 }
@@ -117,6 +131,7 @@ export interface Bridge {
   hooksPlan(): Result<{ plan: { file: string; adds: unknown } }>;
   hooksEnable(): Result;
   hooksDisable(): Result;
+  dismissDigest(): Result;
   panelHeight(height: number): void;
   openFull(focusId?: string): void;
   hidePanel(): void;
@@ -141,6 +156,14 @@ export function ago(iso: string | null, now = Date.now()): string {
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86_400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86_400)}d`;
+}
+
+/** "2h 14m", "45m", "under a minute". */
+export function duration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "under a minute";
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 /** The folder's own name, for a row's meta line. */
