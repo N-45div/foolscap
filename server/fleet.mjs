@@ -40,6 +40,7 @@ import { CodexExecBuilder } from "./codex-exec-doc.mjs";
 import { commandOf, validationKey } from "./outcome.mjs";
 import { claudeExitCode, readTestRun } from "./test-run.mjs";
 import { verifyRepo } from "./verify.mjs";
+import { createWorktree, mergeWorktree, removeWorktree, repoRoot, worktreeChanges } from "./worktree.mjs";
 import { createAcpDriver } from "./drivers/acp.mjs";
 import { createClaudeDriver } from "./drivers/claude.mjs";
 import { createCodexExecDriver } from "./drivers/codex-exec.mjs";
@@ -59,7 +60,8 @@ export const FLEET_AGENTS = {
   ),
 };
 
-const WRITER_ACTIVE = new Set(["starting", "idle", "working", "blocked"]);
+// "checking" too: the repo's tests are running in that checkout.
+const WRITER_ACTIVE = new Set(["starting", "idle", "working", "blocked", "checking"]);
 const pathKey = (value) => process.platform === "win32" ? value.toLowerCase() : value;
 
 /** Synchronous because Fleet.launch is intentionally immediate. This guards
@@ -213,6 +215,7 @@ export class AgentSession extends EventEmitter {
     settingSources = null,
     codexModel = null,
     verify = true,
+    worktree = null,
     record = true,
     recordDir = acpArchiveDir(),
     log = () => {},
@@ -253,6 +256,8 @@ export class AgentSession extends EventEmitter {
     this.queue = []; // next prompts, sent one per green turn
     this.held = null; // { reason } when the queue is waiting on you
     this.verified = null; // the repo's own test run after the last turn
+    this.worktree = worktree; // { repo, path, branch, base } when the task has its own checkout
+    this.changes = null; // { files, added, removed } in the worktree since it started
 
     this.status = "starting"; // starting | idle | working | blocked | checking | done | exited | error
     this.startedAt = now();
@@ -394,6 +399,7 @@ export class AgentSession extends EventEmitter {
         this.verified = null;
       }
     }
+    if (this.worktree) this.changes = await worktreeChanges(this.worktree).catch(() => this.changes);
     if (!["checking", "working", "blocked"].includes(this.status)) return;
     this.status = "done";
     this.doneAt = now();
@@ -446,6 +452,31 @@ export class AgentSession extends EventEmitter {
     if (index < 0 || index >= this.queue.length) throw new Error("no such queued prompt");
     this.queue.splice(index, 1);
     if (!this.queue.length) this.held = null;
+    this.changed();
+  }
+
+  /** Bring this task's worktree onto the person's branch as one commit,
+      then remove it. Returns the new commit's short hash. */
+  async merge() {
+    if (!this.worktree) throw new Error("this task works in your checkout directly; there is nothing to merge");
+    if (["starting", "working", "blocked", "checking"].includes(this.status)) throw new Error("wait for the agent to finish first");
+    const asked = this.builder.cells[0]?.prompt ?? this.name;
+    const subject = `${this.label}: ${asked.split(/\r?\n/)[0]}`.slice(0, 72);
+    const sha = await mergeWorktree(this.worktree, { message: subject });
+    await removeWorktree(this.worktree);
+    this.worktree = null;
+    this.merged = sha;
+    this.close();
+    return sha;
+  }
+
+  /** Throw this task's worktree away. */
+  async discard() {
+    if (!this.worktree) throw new Error("this task has no worktree to discard");
+    this.cancel();
+    this.close();
+    await removeWorktree(this.worktree);
+    this.worktree = null;
     this.changed();
   }
 
@@ -538,6 +569,9 @@ export class AgentSession extends EventEmitter {
       queue: [...this.queue],
       held: this.held,
       assistant: this.assistant,
+      worktree: this.worktree ? { branch: this.worktree.branch, repo: this.worktree.repo } : null,
+      changes: this.changes,
+      merged: this.merged ?? null,
       lastPrompt: this.builder.current?.prompt ?? null,
       lastReply: lastText(this.builder.current),
       model: this.builder.model ?? null,
@@ -587,7 +621,7 @@ export class Fleet extends EventEmitter {
 
   /** Spawn a session; returns at once — the agent boots in the background.
       A `prompt` is sent as soon as it is up; `queue` lines up the ones after. */
-  launch({ agent = "claude", cwd = process.cwd(), name, prompt, queue = [], fleetUrl, ...options } = {}) {
+  launch({ agent = "claude", cwd = process.cwd(), name, prompt, queue = [], fleetUrl, id: givenId, worktree = null, ...options } = {}) {
     const opts = { ...this.defaults, ...options };
     const relay = opts.relay ?? (fleetUrl ? { url: fleetUrl } : null);
     const capability = this.agents().find((entry) => entry.id === agent);
@@ -596,16 +630,17 @@ export class Fleet extends EventEmitter {
     const occupant = [...this.sessions.values()].find((session) =>
       WRITER_ACTIVE.has(session.status) && checkoutKey(session.cwd) === key);
     if (occupant) throw new Error(`workspace is busy with ${occupant.name || occupant.agent || "another agent"}`);
-    const id = randomBytes(6).toString("hex");
+    const id = givenId ?? randomBytes(6).toString("hex");
     const s = new AgentSession({
       id,
-      name: name?.trim() || `${basename(cwd) || "agent"}-${++this.counter}`,
+      name: name?.trim() || `${basename(worktree?.repo ?? cwd) || "agent"}-${++this.counter}`,
       agent,
       cwd,
       relay,
       settingSources: opts.settingSources ?? null,
       codexModel: opts.codexModel ?? null,
       verify: opts.verify ?? true,
+      worktree,
       record: this.record,
       recordDir: this.recordDir,
       log: this.log,
@@ -620,6 +655,20 @@ export class Fleet extends EventEmitter {
       })
       .catch((err) => s.fail(err.message));
     return s.snapshot();
+  }
+
+  /** Launch, in the task's own git worktree when asked and the folder is a
+      repo, so several agents can work on one repo at once. */
+  async launchTask({ worktree = false, cwd = process.cwd(), ...rest } = {}) {
+    if (!worktree || !(await repoRoot(cwd))) return this.launch({ cwd, ...rest });
+    const id = randomBytes(6).toString("hex");
+    const wt = await createWorktree({ cwd, id });
+    try {
+      return this.launch({ ...rest, cwd: wt.path, id, worktree: wt });
+    } catch (err) {
+      await removeWorktree(wt);
+      throw err;
+    }
   }
 
   get(id) {
