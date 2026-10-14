@@ -293,13 +293,13 @@ function applySettings() {
 
 function registerIpc() {
   ipcMain.handle("state:get", () => snapshot());
-  handle("task:start", async ({ agent, cwd, prompt, queue = [] }) => {
+  handle("task:start", async ({ agent, cwd, prompt, queue = [], worktree = true }) => {
     if (!cwd || !existsSync(cwd)) throw new Error("pick a folder that exists");
     if (!String(prompt ?? "").trim()) throw new Error("say what the agent should do");
     // Tasks already running always finish; only new ones wait for a key.
     if (!licence.allowed()) throw new Error("Your 14-day trial has ended. Get foolscap, or enter your key, to start new tasks.");
     await settings.addRepo(cwd);
-    return { session: fleet.launch({ agent, cwd, prompt: prompt.trim(), queue }) };
+    return { session: await fleet.launchTask({ agent, cwd, prompt: prompt.trim(), queue, worktree }) };
   });
   handle("task:answer", (id, optionId, text) => session(id).answerPermission(optionId, text));
   handle("task:prompt", (id, text) => {
@@ -318,6 +318,15 @@ function registerIpc() {
     seen.add(`${id}:${turns}`);
   });
   handle("task:openFolder", (id) => shell.openPath(session(id).cwd));
+  handle("task:merge", async (id) => {
+    const sha = await session(id).merge();
+    fleet.close(id);
+    return { sha };
+  });
+  handle("task:discard", async (id) => {
+    await session(id).discard();
+    fleet.close(id);
+  });
   handle("repo:pick", async () => {
     const pick = await dialog.showOpenDialog(panel?.isVisible() ? panel : full, { properties: ["openDirectory"] });
     if (pick.canceled || !pick.filePaths[0]) return { picked: null };

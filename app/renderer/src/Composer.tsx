@@ -13,6 +13,7 @@ export function Composer({ state }: { state: AppState }) {
   const [agent, setAgent] = useState(settings.defaultAgent);
   const [prompt, setPrompt] = useState("");
   const [thens, setThens] = useState<string[]>([]);
+  const [ownCopy, setOwnCopy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -32,7 +33,7 @@ export function Composer({ state }: { state: AppState }) {
     if (!prompt.trim() || busy) return;
     if (!repo) return pickRepo();
     setBusy(true);
-    const result = await api().start({ agent, cwd: repo, prompt, queue: thens.map((t) => t.trim()).filter(Boolean) });
+    const result = await api().start({ agent, cwd: repo, prompt, queue: thens.map((t) => t.trim()).filter(Boolean), worktree: ownCopy });
     setBusy(false);
     if ("error" in result) return setError(result.error);
     setError(null);
@@ -109,7 +110,13 @@ export function Composer({ state }: { state: AppState }) {
         </div>
       )}
       <div className="actions" style={{ justifyContent: "space-between" }}>
-        <button type="button" className="btn quiet" onClick={() => setThens([...thens, ""])}>+ Then…</button>
+        <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button type="button" className="btn quiet" onClick={() => setThens([...thens, ""])}>+ Then…</button>
+          <label className="muted" style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center" }} title="Work in a separate git worktree, so several agents can share this repo. Merge or discard when done.">
+            <input type="checkbox" checked={ownCopy} onChange={(e) => setOwnCopy(e.target.checked)} />
+            Own worktree
+          </label>
+        </span>
         <button type="submit" className="btn primary" disabled={!prompt.trim() || busy || !ready.length || locked}>
           {locked ? "Trial ended" : busy ? "Starting…" : "Start"}
         </button>

@@ -77,6 +77,27 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
       else if (v?.verdict === "red") body = `Tests failing${counts}, checked by foolscap.`;
       else if (v) body = `Tests unclear: ${v.reason}.`;
       if (s.assistant) body = "Replied. Open to read it.";
+      if (s.worktree && v?.verdict === "green") {
+        const size = s.changes?.files ? ` ${s.changes.files} file${s.changes.files === 1 ? "" : "s"}, +${s.changes.added} −${s.changes.removed}.` : "";
+        show(s.id, {
+          title: `${who} is ready to merge`,
+          body: `${body}${size}`,
+          actions: [{ type: "button", text: "Merge" }, { type: "button", text: "Open" }],
+          onAction: (index) => {
+            if (index !== 0) return onOpen(s.id);
+            fleet.get(s.id)?.merge()
+              .then((sha) => {
+                fleet.close(s.id);
+                log?.(`merged ${s.name} as ${sha} from the notification`);
+              })
+              .catch((err) => {
+                log?.(`merge from the notification failed: ${err.message}`);
+                onOpen(s.id);
+              });
+          },
+        });
+        return;
+      }
       show(s.id, { title: `${who} finished`, body });
       return;
     }

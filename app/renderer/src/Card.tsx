@@ -21,7 +21,8 @@ function Evidence({ s }: { s: Session }) {
   else if (v) chips.push({ text: `tests ${v.verdict}`, tone: v.verdict === "green" ? "green" : v.verdict === "red" ? "red" : undefined });
   if (v) chips.push({ text: "checked by foolscap" });
   if (!v && s.evidence.testsFailed > 0) chips.push({ text: `${s.evidence.testsFailed} failing (agent's run)`, tone: "red" });
-  if (s.evidence.edited > 0) chips.push({ text: `edited ${s.evidence.edited}` });
+  if (s.changes?.files) chips.push({ text: `+${s.changes.added} −${s.changes.removed} · ${s.changes.files} file${s.changes.files === 1 ? "" : "s"}` });
+  else if (s.evidence.edited > 0) chips.push({ text: `edited ${s.evidence.edited}` });
   if (s.queue.length) chips.push({ text: `${s.queue.length} queued` });
   if (!chips.length) return null;
   return (
@@ -88,7 +89,7 @@ export function Card({ s, focused = false }: { s: Session; focused?: boolean }) 
       <div className="body">
         <div className="meta">
           <span>
-            <b>{s.name}</b> · {s.agentLabel} · {folderName(s.cwd)}
+            <b>{s.name}</b> · {s.agentLabel} · {folderName(s.worktree?.repo ?? s.cwd)}
           </span>
           <span>{ago(s.blockedSince ?? s.doneAt ?? s.turnStartedAt ?? s.startedAt)}</span>
         </div>
@@ -120,12 +121,20 @@ export function Card({ s, focused = false }: { s: Session; focused?: boolean }) 
               </>
             )}
             {!p && !ended && (
-              <button className={`btn ${!s.held && s.verified?.verdict !== "green" ? "primary" : ""}`} onClick={() => setSaying("reply")}>
+              <button className={`btn ${!s.held && s.verified?.verdict !== "green" && !(s.worktree && s.status === "done") ? "primary" : ""}`} onClick={() => setSaying("reply")}>
                 Reply
               </button>
             )}
             {!p && !ended && <button className="btn quiet" onClick={() => setSaying("next")}>+ Then…</button>}
-            {!p && s.status === "done" && (
+            {!p && s.status === "done" && s.worktree && !s.held && (
+              <>
+                <button className={`btn ${s.verified?.verdict === "green" ? "primary" : ""}`} onClick={() => run(api().merge(s.id))}>
+                  Merge
+                </button>
+                <button className="btn quiet" onClick={() => run(api().discard(s.id))}>Discard</button>
+              </>
+            )}
+            {!p && s.status === "done" && !s.worktree && (
               <button className="btn quiet" onClick={() => run(api().seen(s.id, s.turns))}>Done</button>
             )}
             {ended && <button className="btn" onClick={() => run(api().close(s.id))}>Clear</button>}

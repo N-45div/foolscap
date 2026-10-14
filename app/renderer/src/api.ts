@@ -32,6 +32,9 @@ export interface Session {
   queue: string[];
   held: { reason: string } | null;
   assistant: boolean;
+  worktree: { branch: string; repo: string } | null;
+  changes: { files: number; added: number; removed: number } | null;
+  merged: string | null;
   lastPrompt: string | null;
   lastReply: string | null;
   turns: number;
@@ -89,7 +92,7 @@ type Result<T = object> = Promise<({ ok: true } & T) | { error: string }>;
 
 export interface Bridge {
   state(): Promise<AppState>;
-  start(spec: { agent: string; cwd: string; prompt: string; queue?: string[] }): Result<{ session: Session }>;
+  start(spec: { agent: string; cwd: string; prompt: string; queue?: string[]; worktree?: boolean }): Result<{ session: Session }>;
   answer(id: string, optionId: string, text?: string): Result;
   prompt(id: string, text: string): Result;
   enqueue(id: string, text: string): Result;
@@ -99,6 +102,8 @@ export interface Bridge {
   close(id: string): Result;
   seen(id: string, turns: number): Result;
   openFolder(id: string): Result;
+  merge(id: string): Result<{ sha: string }>;
+  discard(id: string): Result;
   pickRepo(): Result<{ picked: string | null }>;
   setSettings(patch: Partial<Settings>): Result;
   refreshAgents(): Result;

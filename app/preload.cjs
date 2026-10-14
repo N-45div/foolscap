@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("foolscap", {
   close: call("task:close"),
   seen: call("task:seen"),
   openFolder: call("task:openFolder"),
+  merge: call("task:merge"),
+  discard: call("task:discard"),
   pickRepo: call("repo:pick"),
   setSettings: call("settings:set"),
   refreshAgents: call("agents:refresh"),
