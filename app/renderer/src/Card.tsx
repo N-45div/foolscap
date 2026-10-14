@@ -101,7 +101,7 @@ export function Card({ s, focused = false }: { s: Session; focused?: boolean }) 
 
         {saying ? (
           <Say
-            placeholder={saying === "reply" ? `Reply to ${s.name}…` : "Then…"}
+            placeholder={saying === "reply" ? (s.external ? "Sent when it next stops…" : `Reply to ${s.name}…`) : "Then…"}
             onSend={(text) => (saying === "reply" ? api().prompt(s.id, text) : api().enqueue(s.id, text))}
             onDone={() => setSaying(null)}
           />
@@ -122,10 +122,10 @@ export function Card({ s, focused = false }: { s: Session; focused?: boolean }) 
             )}
             {!p && !ended && (
               <button className={`btn ${!s.held && s.verified?.verdict !== "green" && !(s.worktree && s.status === "done") ? "primary" : ""}`} onClick={() => setSaying("reply")}>
-                Reply
+                {s.external ? "Queue reply" : "Reply"}
               </button>
             )}
-            {!p && !ended && <button className="btn quiet" onClick={() => setSaying("next")}>+ Then…</button>}
+            {!p && !ended && !s.external && <button className="btn quiet" onClick={() => setSaying("next")}>+ Then…</button>}
             {!p && s.status === "done" && s.worktree && !s.held && (
               <>
                 <button className={`btn ${s.verified?.verdict === "green" ? "primary" : ""}`} onClick={() => run(api().merge(s.id))}>

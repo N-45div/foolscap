@@ -5,6 +5,7 @@ import { Card, Quiet } from "./Card";
 import { Composer } from "./Composer";
 import { Bell, BellOff, Expand, Gear, Sheet } from "./icons";
 import { LicenceBanner, LicenceSettings } from "./Licence";
+import { TerminalSessionsSetting } from "./Terminal";
 
 export const yourMove = (sessions: Session[]) => sessions.filter((s) => s.attention.tier <= 1);
 export const agentsMove = (sessions: Session[]) => sessions.filter((s) => s.attention.tier >= 2);
@@ -72,11 +73,12 @@ export function Calm({ state }: { state: AppState }) {
   );
 }
 
-export function SettingsSheet({ settings, licence }: { settings: Settings; licence: Licence }) {
+export function SettingsSheet({ settings, licence, hooks }: { settings: Settings; licence: Licence; hooks: AppState["hooks"] }) {
   const set = (patch: Partial<Settings>) => api().setSettings(patch);
   return (
     <div className="sheet" aria-label="Settings">
       <LicenceSettings licence={licence} />
+      <TerminalSessionsSetting hooks={hooks} />
       <label className="row">
         <span>
           Use my Claude Code settings and CLAUDE.md
@@ -206,7 +208,7 @@ export function Panel({ state, focus }: { state: AppState; focus: string | null 
       )}
       <LicenceBanner licence={state.licence} />
       <Composer state={state} />
-      {settingsOpen && <SettingsSheet settings={state.settings} licence={state.licence} />}
+      {settingsOpen && <SettingsSheet settings={state.settings} licence={state.licence} hooks={state.hooks} />}
       <Footer state={state} onFull={() => api().openFull()} />
     </div>
   );

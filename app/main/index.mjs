@@ -20,7 +20,10 @@ import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { rank } from "../../server/attention.mjs";
+import { ExternalSessions } from "../../server/external.mjs";
 import { Fleet, fleetAgentCatalog } from "../../server/fleet.mjs";
+import * as claudeHooks from "./claude-hooks.mjs";
+import { startHookServer } from "./hook-server.mjs";
 import { Licence } from "./licence.mjs";
 import { createNotifier } from "./notify.mjs";
 import { startRelay } from "./relay.mjs";
@@ -40,6 +43,9 @@ const DEV_URL = process.env.VITE_DEV_SERVER_URL || null;
 let settings;
 let licence;
 let fleet;
+let external;
+let hookServer = null;
+let hookError = null;
 let tray = null;
 let panel = null;
 let full = null;
@@ -53,14 +59,16 @@ const log = (line) => console.log(`[foolscap] ${line}`);
 // ── State ────────────────────────────────────────────────────────────
 
 function snapshot() {
-  const sessions = rank(fleet.list(), seen);
+  const sessions = rank([...fleet.list(), ...external.list()], seen);
   const needs = sessions.filter((s) => s.attention.tier <= 1).length;
   const working = sessions.filter((s) => ["starting", "working", "checking", "blocked"].includes(s.status) && s.attention.tier > 1).length;
   return {
     sessions,
     agents,
-    settings: settings.get(),
+    // The hook token stays in this process.
+    settings: { ...settings.get(), hookToken: undefined },
     licence: licence.status(),
+    hooks: { on: Boolean(settings.get().terminalSessions), error: hookError },
     counts: { needs, working },
     platform: process.platform,
   };
@@ -255,10 +263,38 @@ function openSession(id) {
   }
 }
 
+// ── Sessions from the person's own terminal ──────────────────────────
+
+function closeTask(id) {
+  if (external.get(id)) external.get(id).close();
+  else fleet.close(id);
+}
+
+const hookUrlNow = () => claudeHooks.hookUrl(settings.get().hookPort, settings.get().hookToken);
+
+/** Listen for Claude Code's hooks while the person has them switched on. */
+async function syncHookServer() {
+  const want = settings.get().terminalSessions && settings.get().hookToken;
+  if (!want && hookServer) {
+    hookServer.close();
+    hookServer = null;
+  }
+  if (want && !hookServer) {
+    try {
+      hookServer = await startHookServer({ port: settings.get().hookPort, token: settings.get().hookToken, external, log });
+      hookError = null;
+    } catch (err) {
+      hookError = `port ${settings.get().hookPort} is busy (${err.code ?? err.message})`;
+      log(`hook server: ${hookError}`);
+    }
+  }
+  pushState();
+}
+
 // ── IPC ──────────────────────────────────────────────────────────────
 
 function session(id) {
-  const s = fleet.get(id);
+  const s = fleet.get(id) ?? external.get(id);
   if (!s) throw new Error("that task is gone");
   return s;
 }
@@ -311,9 +347,7 @@ function registerIpc() {
   handle("task:dequeue", (id, index) => session(id).dequeue(index));
   handle("task:sendNext", (id) => session(id).sendNext());
   handle("task:cancel", (id) => session(id).cancel());
-  handle("task:close", (id) => {
-    fleet.close(id);
-  });
+  handle("task:close", (id) => closeTask(id));
   handle("task:seen", (id, turns) => {
     seen.add(`${id}:${turns}`);
   });
@@ -333,12 +367,29 @@ function registerIpc() {
     await settings.addRepo(pick.filePaths[0]);
     return { picked: pick.filePaths[0] };
   });
-  handle("settings:set", async (patch) => {
+  handle("settings:set", async (input = {}) => {
+    // Hooks are switched only through hooks:enable / hooks:disable, after the person has seen the plan.
+    const { hookToken, hookPort, terminalSessions, ...patch } = input;
     await settings.set(patch);
     applySettings();
   });
   handle("agents:refresh", () => {
     agents = fleetAgentCatalog();
+  });
+  handle("hooks:plan", async () => {
+    if (!settings.get().hookToken) await settings.set({ hookToken: randomBytes(18).toString("hex") });
+    return { plan: claudeHooks.plan(hookUrlNow()) };
+  });
+  handle("hooks:enable", async () => {
+    if (!settings.get().hookToken) await settings.set({ hookToken: randomBytes(18).toString("hex") });
+    await claudeHooks.install(hookUrlNow());
+    await settings.set({ terminalSessions: true });
+    await syncHookServer();
+  });
+  handle("hooks:disable", async () => {
+    await claudeHooks.uninstall();
+    await settings.set({ terminalSessions: false });
+    await syncHookServer();
   });
   handle("licence:activate", async (key) => ({ licence: await licence.activate(key) }));
   handle("licence:deactivate", async () => ({ licence: await licence.deactivate() }));
@@ -405,11 +456,21 @@ if (!app.requestSingleInstanceLock()) {
     fleet.defaults.relay = { url: relay.url, token: TOKEN };
     agents = fleetAgentCatalog();
 
-    const notify = createNotifier({ fleet, getSettings: () => settings.get(), onOpen: openSession, log });
-    fleet.on("change", (s) => {
-      notify(s);
-      pushState();
+    external = new ExternalSessions({ log });
+    const notify = createNotifier({
+      find: (id) => fleet.get(id) ?? external.get(id),
+      closeTask,
+      getSettings: () => settings.get(),
+      onOpen: openSession,
+      log,
     });
+    for (const source of [fleet, external]) {
+      source.on("change", (s) => {
+        notify(s);
+        pushState();
+      });
+    }
+    await syncHookServer();
 
     ensureDevShortcut();
     await readTaskbarTheme();

@@ -43,6 +43,8 @@ export interface Session {
   doneAt: string | null;
   blockedSince: string | null;
   error: string | null;
+  /** A Claude Code session the person started in their own terminal. */
+  external?: boolean;
   attention: { tier: 0 | 1 | 2 | 3; reason: string; since: string | null };
 }
 
@@ -84,6 +86,7 @@ export interface AppState {
   agents: Agent[];
   settings: Settings;
   licence: Licence;
+  hooks: { on: boolean; error: string | null };
   counts: { needs: number; working: number };
   platform: string;
 }
@@ -111,6 +114,9 @@ export interface Bridge {
   deactivateKey(): Result<{ licence: Licence }>;
   checkKey(): Result<{ licence: Licence }>;
   openLink(which: "app" | "appVoice" | "portal"): Result;
+  hooksPlan(): Result<{ plan: { file: string; adds: unknown } }>;
+  hooksEnable(): Result;
+  hooksDisable(): Result;
   panelHeight(height: number): void;
   openFull(focusId?: string): void;
   hidePanel(): void;

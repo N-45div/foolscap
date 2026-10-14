@@ -130,7 +130,7 @@ export function Full({ state, focus, setFocus }: { state: AppState; focus: strin
         <div style={{ marginTop: "auto" }}>
           <Composer state={state} />
           <LicenceBanner licence={state.licence} />
-          <SettingsSheet settings={state.settings} licence={state.licence} />
+          <SettingsSheet settings={state.settings} licence={state.licence} hooks={state.hooks} />
         </div>
       </div>
       <main className="right">{selected ? <Detail s={selected} /> : <Calm state={state} />}</main>

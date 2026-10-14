@@ -13,7 +13,7 @@
  */
 import { Notification } from "electron";
 
-export function createNotifier({ fleet, getSettings, onOpen, log }) {
+export function createNotifier({ find, closeTask, getSettings, onOpen, log }) {
   const last = new Map(); // session id → key of what we last told the person
   const live = new Map(); // keep shown notifications referenced until clicked
 
@@ -42,7 +42,7 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
   /** A reply typed into a notification: the next prompt, now if the agent
       is free, otherwise queued behind what it is doing. */
   function replyTo(id, text) {
-    const current = fleet.get(id);
+    const current = find(id);
     if (!current) return;
     try {
       if (current.status === "idle" || current.status === "done") current.prompt(text);
@@ -76,7 +76,7 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
         body: p.toolCall?.title ?? "A question for you",
         replyPlaceholder: "Your answer…",
         onReply: (text) => {
-          const current = fleet.get(s.id);
+          const current = find(s.id);
           if (current?.pendingPermission?.requestId === p.requestId) current.answerPermission(undefined, text);
         },
       });
@@ -91,7 +91,7 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
         body: p.toolCall?.title ?? "Permission requested",
         actions: [{ type: "button", text: "Approve" }, { type: "button", text: "Deny" }],
         onAction: (index) => {
-          const current = fleet.get(s.id);
+          const current = find(s.id);
           if (current?.pendingPermission?.requestId !== p.requestId) return;
           current.answerPermission(index === 0 ? allow : reject);
           log?.(`answered ${index === 0 ? "approve" : "deny"} from the notification`);
@@ -105,7 +105,15 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
           title: `${who}: next prompt held`,
           body: s.held.reason,
           actions: [{ type: "button", text: "Send anyway" }, { type: "button", text: "Open" }],
-          onAction: (index) => (index === 0 ? fleet.get(s.id)?.sendNext() : onOpen(s.id)),
+          onAction: (index) => {
+            if (index !== 0) return onOpen(s.id);
+            try {
+              find(s.id)?.sendNext();
+            } catch (err) {
+              log?.(err.message);
+              onOpen(s.id);
+            }
+          },
           replyPlaceholder: `Tell ${s.name} what to do instead…`,
           onReply: (text) => replyTo(s.id, text),
         });
@@ -128,9 +136,9 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
           onReply: (text) => replyTo(s.id, text),
           onAction: (index) => {
             if (index !== 0) return onOpen(s.id);
-            fleet.get(s.id)?.merge()
+            find(s.id)?.merge()
               .then((sha) => {
-                fleet.close(s.id);
+                closeTask(s.id);
                 log?.(`merged ${s.name} as ${sha} from the notification`);
               })
               .catch((err) => {
