@@ -38,6 +38,9 @@ sends the next prompt only when the tests pass.
   and Deny, and queued prompts go out at their next stop after green tests.
 - **While you were away**, and a Today line, both counted from a local
   journal of what happened.
+- **Voice prompts**: a mic in the new-task line that records, cuts at your
+  pauses, uploads while you talk and writes a clean prompt, through
+  foolscap Cloud with your licence key.
 
 ### Licence and price
 

@@ -147,9 +147,13 @@ asks. Keys are checked with [Polar](https://polar.sh): only the key, its
 activation and your computer's name are sent, and a key keeps working
 offline for 7 days after its last check.
 
-**Voice prompts** (coming with the first release): hold a key, speak
-(Hinglish welcome), and a clean prompt lands in the task, with your
-repo's file names spelled right.
+**Voice prompts.** Click the mic in the new-task line, talk (Hinglish
+welcome), click again, and a clean prompt lands in the box. The audio is
+cut at your pauses and sent while you talk, so the prompt is ready
+moments after you stop. It goes to foolscap Cloud with your licence key
+and nothing else; it is transcribed and written up there, and neither
+the audio nor the text is kept. Voice needs a licence key, and works
+once foolscap Cloud is live.
 
 ## Develop
 
