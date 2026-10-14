@@ -17,15 +17,41 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
   const last = new Map(); // session id → key of what we last told the person
   const live = new Map(); // keep shown notifications referenced until clicked
 
-  function show(id, { title, body, actions = [], onAction }) {
+  function show(id, { title, body, actions = [], onAction, onReply, replyPlaceholder }) {
     if (!getSettings().notify || !Notification.isSupported()) return;
-    const n = new Notification({ title, body, actions, silent: false, timeoutType: actions.length ? "never" : "default" });
+    const n = new Notification({
+      title,
+      body,
+      actions,
+      silent: false,
+      timeoutType: actions.length || onReply ? "never" : "default",
+      ...(onReply ? { hasReply: true, replyPlaceholder: replyPlaceholder ?? "Reply…" } : {}),
+    });
     n.on("click", () => onOpen(id));
     n.on("action", (details, legacyIndex) => onAction?.(details?.actionIndex ?? legacyIndex));
+    n.on("reply", (details, legacyReply) => {
+      const text = String(details?.reply ?? legacyReply ?? "").trim();
+      if (text) onReply?.(text);
+    });
     n.on("close", () => live.delete(n));
     n.on("failed", (_e, error) => log?.(`notification failed: ${error}`));
     live.set(n, id);
     n.show();
+  }
+
+  /** A reply typed into a notification: the next prompt, now if the agent
+      is free, otherwise queued behind what it is doing. */
+  function replyTo(id, text) {
+    const current = fleet.get(id);
+    if (!current) return;
+    try {
+      if (current.status === "idle" || current.status === "done") current.prompt(text);
+      else current.enqueue(text);
+      log?.(`replied from the notification`);
+    } catch (err) {
+      log?.(`reply from the notification failed: ${err.message}`);
+      onOpen(id);
+    }
   }
 
   function keyOf(s) {
@@ -43,6 +69,19 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
     last.set(s.id, key);
     const who = `${s.agentLabel} · ${s.name}`;
 
+    if (key.startsWith("ask:") && s.pendingPermission.answer === "text") {
+      const p = s.pendingPermission;
+      show(s.id, {
+        title: `${who} asks`,
+        body: p.toolCall?.title ?? "A question for you",
+        replyPlaceholder: "Your answer…",
+        onReply: (text) => {
+          const current = fleet.get(s.id);
+          if (current?.pendingPermission?.requestId === p.requestId) current.answerPermission(undefined, text);
+        },
+      });
+      return;
+    }
     if (key.startsWith("ask:")) {
       const p = s.pendingPermission;
       const allow = p.options?.find((o) => /allow/i.test(o.kind ?? o.optionId))?.optionId ?? "allow_once";
@@ -67,6 +106,8 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
           body: s.held.reason,
           actions: [{ type: "button", text: "Send anyway" }, { type: "button", text: "Open" }],
           onAction: (index) => (index === 0 ? fleet.get(s.id)?.sendNext() : onOpen(s.id)),
+          replyPlaceholder: `Tell ${s.name} what to do instead…`,
+          onReply: (text) => replyTo(s.id, text),
         });
         return;
       }
@@ -83,6 +124,8 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
           title: `${who} is ready to merge`,
           body: `${body}${size}`,
           actions: [{ type: "button", text: "Merge" }, { type: "button", text: "Open" }],
+          replyPlaceholder: `Not yet? Tell ${s.name} what to change…`,
+          onReply: (text) => replyTo(s.id, text),
           onAction: (index) => {
             if (index !== 0) return onOpen(s.id);
             fleet.get(s.id)?.merge()
@@ -98,7 +141,12 @@ export function createNotifier({ fleet, getSettings, onOpen, log }) {
         });
         return;
       }
-      show(s.id, { title: `${who} finished`, body });
+      show(s.id, {
+        title: `${who} finished`,
+        body,
+        replyPlaceholder: `Next, ${s.name} should…`,
+        onReply: (text) => replyTo(s.id, text),
+      });
       return;
     }
     show(s.id, { title: `${who} stopped`, body: s.error ?? "The agent exited." });
