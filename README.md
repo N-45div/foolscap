@@ -19,8 +19,9 @@ watching for you.
   Click the icon and a small panel opens: **Your move** on top
   (approvals, failing checks, finished work), **Agents' move** below,
   and a line to start the next task. `Ctrl+Shift+Space` does the same.
-- **Approve from the notification.** When an agent asks to run a
-  command, the notification has **Approve** and **Deny** on it.
+- **Answer from the notification.** When an agent asks to run a
+  command, the notification has **Approve** and **Deny** on it. When it
+  finishes, type its next step right into the notification.
 - **Queue the next step.** Give a task its "then…" steps. After each
   turn, foolscap runs the repo's own tests itself, outside the agent's
   sandbox, and sends the next prompt only when they pass. Red or unclear
@@ -29,9 +30,39 @@ watching for you.
   code 0 and at least one test that actually ran, read from the runner's
   own counts. Zero tests, a missing exit code or a sandbox block is never
   green.
+- **Many agents, one repo.** Each task gets its own git worktree, so
+  several agents can work on the same repo at once. When one is done and
+  green: **Merge** (one commit on your branch) or **Discard**.
 - **Every agent in one place.** Claude Code and Codex natively, plus any
   agent that speaks [ACP](https://agentclientprotocol.com), including
-  personal assistants like Hermes and OpenClaw.
+  personal assistants like Hermes and OpenClaw. Switch on **Claude Code
+  sessions from my terminal** in Settings and the ones you start
+  yourself show up too, approvals included.
+- **While you were away.** Come back after a while and the panel says
+  what happened: what finished green, what went red, what went out from
+  the queue, what is waiting for you. Counted from a local journal, never
+  guessed.
+
+### Sessions you start yourself
+
+Settings › **Claude Code sessions from my terminal** shows the exact
+hooks foolscap would add to your Claude Code settings before it adds
+them, backs the file up first, and **Turn off** removes exactly those.
+The hooks post to `127.0.0.1:47821` with a secret token. If foolscap is
+closed, Claude Code carries on as normal; a permission you don't answer
+in foolscap within 45 seconds is asked in your terminal as usual. A
+queued prompt goes out when the session next stops, after the repo's
+tests pass.
+
+### Worktrees
+
+New tasks get a worktree under your local app data folder by default
+(untick **Own worktree** to work in the folder directly). Installed
+dependencies (`node_modules`, `.venv`) are linked in from your checkout,
+and files listed in a `.worktreeinclude` at the repo root (one per line,
+like `.env.local`) are copied. **Merge** refuses if your checkout has
+uncommitted changes and backs out of a conflict, so your own work is
+never mixed in.
 
 ## Agents
 

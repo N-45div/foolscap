@@ -28,6 +28,16 @@ sends the next prompt only when the tests pass.
   installers to their real executables and launch with no shell; API
   keys are stripped from their environment so a subscription is never
   switched to API billing.
+- **A worktree per task**, with Merge (one commit on your branch,
+  refusing a dirty checkout and backing out of conflicts) and Discard.
+  Dependencies are linked in, `.worktreeinclude` files copied.
+- **Reply from the notification**: a finished turn's next prompt, what to
+  do instead of a held one, or the answer to an agent's question.
+- **Claude Code sessions from your own terminal**, through hooks you
+  approve in Settings: they join the inbox, their permissions get Approve
+  and Deny, and queued prompts go out at their next stop after green tests.
+- **While you were away**, and a Today line, both counted from a local
+  journal of what happened.
 
 ### Licence and price
 
