@@ -20,6 +20,10 @@ export const DEFAULTS = {
   notify: true,
   theme: "system", // system | dark | light
   shortcut: "CommandOrControl+Shift+Space",
+  // Claude Code sessions started in a terminal show up too (hooks).
+  terminalSessions: false,
+  hookPort: 47821,
+  hookToken: null,
 };
 
 export class Settings {
