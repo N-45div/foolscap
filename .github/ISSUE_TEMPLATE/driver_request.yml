@@ -1,0 +1,38 @@
+name: Driver request
+description: Let the fleet run and steer another agent
+labels: ["driver", "help wanted"]
+body:
+  - type: input
+    id: agent
+    attributes:
+      label: Which agent
+      placeholder: "Conductor, Cursor Agent, a cloud agent, …"
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How can it be driven programmatically?
+      options:
+        - It speaks ACP over stdio (foolscap may already run it — try the command as the agent name)
+        - It has a headless / JSON streaming mode (like `claude -p --output-format stream-json`)
+        - It has an HTTP API (like Devin)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: >
+        The command or API, how it reports a turn ending, and how it asks
+        for permission or a decision — that last part is what puts an
+        agent in the "needs you" queue.
+    validations:
+      required: true
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Want to build it?
+      options:
+        - label: I'd like to send the PR (see CONTRIBUTING.md → "A driver")

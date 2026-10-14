@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node --test tests/*.test.mjs
+      - run: pnpm exec tsc -p app/renderer/tsconfig.json
+      - run: pnpm build
+
+  # Desktop packages on main (as test artifacts) and on version tags.
+  package:
+    needs: verify
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            # NSIS only: the appx target needs the Store identity filled in package.json first.
+            target: --win nsis
+            name: windows
+            files: release/*.exe
+          - os: ubuntu-latest
+            target: --linux
+            name: linux
+            files: |
+              release/*.AppImage
+              release/*.deb
+              release/*.rpm
+              release/*.pacman
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # rpm builds the .rpm; bsdtar (libarchive-tools) builds the pacman package.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm libarchive-tools
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec electron-builder ${{ matrix.target }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foolscap-${{ matrix.name }}
+          path: ${{ matrix.files }}
+          retention-days: 30

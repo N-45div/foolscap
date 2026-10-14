@@ -1,0 +1,37 @@
+name: Harness request
+description: Add a coding agent's session logs to the archive
+labels: ["harness", "help wanted"]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Which tool
+      placeholder: "Antigravity CLI, Conductor, Cursor Agent, …"
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where it keeps sessions on disk
+      description: Directory or database path, and how it's laid out.
+      placeholder: "~/.tool/sessions/<project>/<id>.jsonl"
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: A synthetic sample of the format
+      description: >
+        A handful of lines with made-up content: a user prompt, an
+        assistant reply, a tool call and its result. This is the single
+        most useful thing you can include — it turns the request into a
+        PR-sized task. Never a real transcript.
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Want to build it?
+      options:
+        - label: I'd like to send the PR (see CONTRIBUTING.md → "A harness")

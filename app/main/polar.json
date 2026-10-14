@@ -1,0 +1,12 @@
+{
+  "organizationId": "[YOUR POLAR ORGANIZATION ID]",
+  "benefits": {
+    "[LICENCE-KEY BENEFIT ID OF THE $19 FOOLSCAP PRODUCT]": "app",
+    "[LICENCE-KEY BENEFIT ID OF THE $99 FOOLSCAP + VOICE PRODUCT]": "app+voice"
+  },
+  "links": {
+    "app": "[POLAR CHECKOUT LINK FOR FOOLSCAP]",
+    "appVoice": "[POLAR CHECKOUT LINK FOR FOOLSCAP + VOICE]",
+    "portal": "[POLAR CUSTOMER PORTAL LINK]"
+  }
+}
