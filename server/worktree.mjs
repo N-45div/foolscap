@@ -87,9 +87,37 @@ async function linkDependencies(repo, path) {
   }
 }
 
+/** The dependency folders foolscap linked into this worktree. */
+async function linkedHere(path) {
+  const names = [];
+  for (const name of LINKED) {
+    try {
+      if ((await lstat(join(path, name))).isSymbolicLink()) names.push(name);
+    } catch {
+      // not there
+    }
+  }
+  return names;
+}
+
+/**
+ * Stage the agent's work without the dependency links. A link is never
+ * the task's work: it exists only because the folder was not tracked. On
+ * Linux git does not match a symlink against `node_modules/` in
+ * .gitignore (the slash means "a folder"), so without this a merge would
+ * commit the link. So it is unstaged after every add, which also covers an
+ * agent that staged it itself. (An exclude pathspec would be neater, but
+ * Git for Windows refuses one that names an ignored path.)
+ */
+async function stageWork(wt, { intentOnly = false } = {}) {
+  const linked = await linkedHere(wt.path);
+  await git(wt.path, ["add", "-A", ...(intentOnly ? ["-N"] : [])]);
+  if (linked.length) await git(wt.path, ["rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", ...linked]);
+}
+
 /** Commit whatever the agent left in the worktree, so the branch holds it all. */
 async function snapshot(wt, message) {
-  await git(wt.path, ["add", "-A"]);
+  await stageWork(wt);
   const staged = await git(wt.path, ["diff", "--cached", "--name-only"]);
   if (!staged) return false;
   await git(wt.path, ["-c", "core.hooksPath=", "commit", "-q", "--no-verify", "-m", message]);
@@ -99,7 +127,7 @@ async function snapshot(wt, message) {
 /** What the task changed since it started: `{ files, added, removed }`. */
 export async function worktreeChanges(wt) {
   // Include files the agent created but never staged.
-  await git(wt.path, ["add", "-A", "-N"]).catch(() => {});
+  await stageWork(wt, { intentOnly: true }).catch(() => {});
   const numstat = await git(wt.path, ["diff", "--numstat", wt.base]);
   let added = 0;
   let removed = 0;

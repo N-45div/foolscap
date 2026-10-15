@@ -46,6 +46,19 @@ test("changes are counted, new files included, and merged as one commit", async 
   await mergeWorktree(wt, { message: "foolscap: add two" });
   assert.equal(await readFile(join(dir, "b.txt"), "utf8"), "new\n");
   assert.equal(await git(dir, ["log", "-1", "--format=%s"]), "foolscap: add two");
+  assert.equal(await git(dir, ["ls-files", "node_modules"]), "", "the dependency link is never merged");
+  await removeWorktree(wt);
+});
+
+test("a dependency link stays out of the merge even when the agent staged everything", async () => {
+  const { dir, root } = await repo();
+  const wt = await createWorktree({ cwd: dir, id: "t4", root });
+  await writeFile(join(wt.path, "c.txt"), "agent\n");
+  await git(wt.path, ["add", "-A"]);
+  assert.deepEqual(await worktreeChanges(wt), { files: 1, added: 1, removed: 0 });
+  await mergeWorktree(wt, { message: "foolscap: add c" });
+  assert.equal(await git(dir, ["ls-files", "node_modules"]), "");
+  assert.equal(await readFile(join(dir, "c.txt"), "utf8"), "agent\n");
   await removeWorktree(wt);
 });
 
