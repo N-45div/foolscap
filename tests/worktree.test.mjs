@@ -15,6 +15,7 @@ async function repo() {
   await git(dir, ["init", "-q", "-b", "main"]);
   await git(dir, ["config", "user.name", "Test"]);
   await git(dir, ["config", "user.email", "test@example.invalid"]);
+  await git(dir, ["config", "core.autocrlf", "false"]);
   await writeFile(join(dir, "a.txt"), "one\n");
   await mkdir(join(dir, "node_modules"));
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");

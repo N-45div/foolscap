@@ -65,7 +65,7 @@ test("builder: stream-json becomes cells with tools paired and a stop reason", (
 test("the native driver boots, runs a turn, and reads evidence from Claude Code's own tool names", async () => {
   const { s } = await one();
   assert.equal(s.snapshot().driver, "claude");
-  assert.equal(s.snapshot().agentLabel, "claude code");
+  assert.equal(s.snapshot().agentLabel, "Claude Code");
 
   s.prompt("edit the ack then run tests");
   assert.equal(s.status, "working");
@@ -77,7 +77,7 @@ test("the native driver boots, runs a turn, and reads evidence from Claude Code'
   const doc = s.doc();
   const edit = doc.cells[0].parts.find((p) => p.kind === "tool" && p.tool.name === "Edit").tool;
   assert.equal(edit.input.old_string, "ack(job)");
-  assert.match(doc.meta.agent, /claude code · claude-fake-1 · native/);
+  assert.match(doc.meta.agent, /Claude Code · claude-fake-1 · native/);
   assert.equal(attention(s.snapshot()).tier, 1);
 });
 
@@ -131,7 +131,7 @@ test("the recording replays into the same document through the claude builder", 
   assert.equal(files.length, 1);
   const lines = (await readFile(join(dir, files[0]), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
   assert.equal(lines[0].driver, "claude");
-  assert.equal(lines[0].agent, "claude code");
+  assert.equal(lines[0].agent, "Claude Code");
 
   const b = new ClaudeStreamBuilder();
   for (const l of lines.slice(1)) b.feed(l.dir, l.msg, l.t);

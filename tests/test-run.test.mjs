@@ -82,6 +82,11 @@ test("a runner still counts after cd, env vars, launchers and wrapper shells", (
   assert.equal(runnerKind("echo \"npm test\""), null);
 });
 
+test("a runner's own failure count is red even without an exit code; green never is", () => {
+  assert.equal(readTestRun({ command: "npx vitest run", output: "Tests  1 failed | 2 passed (3)", exitCode: null }).verdict, "red");
+  assert.equal(readTestRun({ command: "npx vitest run", output: "Tests  3 passed (3)", exitCode: null }).verdict, "unknown");
+});
+
 test("go test has no counts, so its exit code decides", () => {
   assert.equal(readTestRun({ command: "go test ./...", output: "ok  \texample.com/m\t0.01s", exitCode: 0 }).verdict, "green");
   assert.equal(readTestRun({ command: "go test ./...", output: "FAIL\texample.com/m\t0.01s", exitCode: 1 }).verdict, "red");

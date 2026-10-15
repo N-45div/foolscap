@@ -33,7 +33,7 @@ async function turn(text) {
   send({ type: "assistant", session_id: SID, message: { role: "assistant", content: [{ type: "tool_use", id: "toolu_t1", name: "Bash", input: { command: "pnpm test" } }] } });
   await sleep(20);
   if (cancelled) return;
-  send({ type: "user", session_id: SID, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_t1", is_error: red, content: red ? "Tests  2 failed, 9 passed\nFAIL tests/a.ts" : "Tests  11 passed (11)" }] } });
+  send({ type: "user", session_id: SID, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_t1", is_error: red, content: red ? "Exit code 1\n      Tests  2 failed | 9 passed (11)\n FAIL tests/a.ts" : "      Tests  11 passed (11)" }] } });
   send({ type: "assistant", session_id: SID, message: { role: "assistant", content: [{ type: "text", text: red ? "Two tests are red." : "All green." }], usage: { output_tokens: 8 } } });
   send({ type: "result", subtype: "success", is_error: false, session_id: SID, num_turns: 1, total_cost_usd: 0.0042, usage: { output_tokens: 20 } });
 }

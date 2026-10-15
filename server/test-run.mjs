@@ -161,7 +161,10 @@ export function readTestRun({ command, output, exitCode = null, kind: knownKind 
   if (!kind) return result("unknown", "not a test or build command");
 
   if (SANDBOX_BLOCKED.test(text)) return result("unknown", "the agent's sandbox blocked the run");
-  if (exitCode === null) return result("unknown", "exit code not reported");
+  if (exitCode === null) {
+    if (counts?.failed > 0) return result("red", `${counts.failed} of ${counts.total} failed`);
+    return result("unknown", "exit code not reported");
+  }
   if (exitCode !== 0) return result("red", `exit code ${exitCode}`);
   if (kind === "build") return result("green", "exit code 0");
   if (NOTHING_RAN.test(text)) return result("unknown", "no tests ran");

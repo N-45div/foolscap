@@ -81,7 +81,7 @@ async function runTurn(req) {
     sessionUpdate: "tool_call_update",
     toolCallId: "t1",
     status: red ? "failed" : "completed",
-    rawOutput: red ? "Tests  2 failed, 9 passed\nFAIL tests/a.ts" : "Tests  11 passed (11)",
+    rawOutput: red ? "      Tests  2 failed | 9 passed (11)\n FAIL tests/a.ts" : "      Tests  11 passed (11)",
   });
   update(sessionId, {
     sessionUpdate: "agent_message_chunk",

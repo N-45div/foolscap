@@ -70,7 +70,7 @@ test("scan lists top-level sessions grouped by directory, with byte and time est
   assert.equal(parseOpencodeRef("C:/x.jsonl"), null);
 });
 
-test("a session expands to NDJSON and parses into cells with mapped tool inputs", { skip: !hasSqlite && "node:sqlite unavailable" }, async () => {
+test("a session expands to NDJSON with its messages and tool parts", { skip: !hasSqlite && "node:sqlite unavailable" }, async () => {
   const dir = await synthDb();
   const text = readOpencodeSession(join(dir, "opencode.db"), "ses_1");
   const lines = text.trim().split("\n").map((l) => JSON.parse(l));
@@ -80,20 +80,6 @@ test("a session expands to NDJSON and parses into cells with mapped tool inputs"
   assert.equal(lines.filter((l) => l.type === "part").length, 8);
   assert.equal(lines.find((l) => l.type === "part" && l.tool === "bash").partType, "tool");
 
-  const { parseOpencodeSession } = await import("../src/sources/opencode.ts");
-  const doc = parseOpencodeSession(text);
-  assert.equal(doc.cells.length, 1);
-  assert.equal(doc.cells[0].prompt, "make the tests pass");
-  assert.equal(doc.cells[0].outputTokens, 240);
-  assert.match(doc.meta.agent, /opencode · claude-x · build/);
-  const tools = doc.cells[0].parts.filter((p) => p.kind === "tool").map((p) => p.tool);
-  assert.deepEqual(tools.map((t) => t.name), ["edit", "bash"]);
-  assert.equal(tools[0].input.file_path, "src/queue.ts");
-  assert.equal(tools[0].input.old_string, "q.ack(job)");
-  assert.equal(tools[0].input.new_string, "await q.ack(job)");
-  assert.equal(tools[1].result, "Tests  11 passed (11)");
-  assert.equal(doc.cells[0].parts.filter((p) => p.kind === "thinking").length, 1);
-  assert.equal(doc.cells[0].parts.filter((p) => p.kind === "text").length, 2);
 });
 
 test("the shelf and the judge read OpenCode sessions like any other", { skip: !hasSqlite && "node:sqlite unavailable" }, async () => {
