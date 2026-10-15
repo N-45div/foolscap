@@ -1,7 +1,7 @@
 {
   "name": "foolscap",
   "productName": "foolscap",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-beta.1",
   "private": true,
   "type": "module",
   "description": "An inbox for your coding agents and assistants. Lives in the tray, tells you the moment one needs you, and sends the next prompt only when the tests pass.",

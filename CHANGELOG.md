@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-alpha.0 — unreleased
+## 1.0.0-beta.1 — 15 October 2026
 
 foolscap is a desktop app that lives in your tray: an inbox for your
 coding agents and assistants. It tells you the moment one needs you, and
@@ -12,7 +12,14 @@ sends the next prompt only when the tests pass.
   opens a compact panel: Your move (approvals, red checks, held queues,
   finished work), Agents' move, and a line to start the next task.
   Ctrl+Shift+Space toggles it; the full window shows one task in detail.
-- **Notifications with Approve and Deny** on the notification itself,
+- **The pill**, a small capsule above the taskbar with one mark per task
+  (a dot when one needs you, a ring while one works). Hover it to approve,
+  deny or merge right there; click it for the panel. Drag it anywhere.
+- **The orbit**: you at the centre and every task a planet, urgency as
+  distance. Each task keeps its own angle, so it moves straight in or out
+  as its state changes. Tab walks the planets, A approves, D denies.
+- **Notifications with Approve and Deny** on the notification itself
+  (Windows; Linux notifications carry no buttons, so the pill does it),
   and a finished turn reported with foolscap's own test verdict.
 - **The next-prompt queue.** Line up "then…" steps per task. After each
   turn foolscap runs the repo's own tests itself, outside any agent
@@ -31,7 +38,7 @@ sends the next prompt only when the tests pass.
 - **A worktree per task**, with Merge (one commit on your branch,
   refusing a dirty checkout and backing out of conflicts) and Discard.
   Dependencies are linked in, `.worktreeinclude` files copied.
-- **Reply from the notification**: a finished turn's next prompt, what to
+- **Reply from the notification** (Windows): a finished turn's next prompt, what to
   do instead of a held one, or the answer to an agent's question.
 - **Claude Code sessions from your own terminal**, through hooks you
   approve in Settings: they join the inbox, their permissions get Approve
