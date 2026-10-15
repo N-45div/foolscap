@@ -75,7 +75,8 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "shortcutName": "foolscap"
+      "shortcutName": "foolscap",
+      "artifactName": "foolscap-setup-${arch}.${ext}"
     },
     "appx": {
       "applicationId": "foolscap",
@@ -94,6 +95,18 @@
       "category": "Development",
       "synopsis": "An inbox for your coding agents",
       "maintainer": "N Divij"
+    },
+    "appImage": {
+      "artifactName": "foolscap-${arch}.${ext}"
+    },
+    "deb": {
+      "artifactName": "foolscap-${arch}.${ext}"
+    },
+    "rpm": {
+      "artifactName": "foolscap-${arch}.${ext}"
+    },
+    "pacman": {
+      "artifactName": "foolscap-${arch}.${ext}"
     }
   },
   "homepage": "https://foolscap-topaz.vercel.app"
