@@ -38,7 +38,9 @@ const TOAST_CLSID = "{6B1F6E2C-5C5B-4C1D-9E0B-2B7F3D9A4C11}";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
 const PRELOAD = join(HERE, "..", "preload.cjs");
-const PANEL_WIDTH = 392;
+// 440 for the panel itself plus the 10 px margin its shadow lives in, each side.
+const PANEL_WIDTH = 460;
+const PILL_SIZE = { width: 380, height: 300 };
 const TOKEN = randomBytes(24).toString("hex");
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || null;
 
@@ -54,6 +56,7 @@ let hookServer = null;
 let hookError = null;
 let tray = null;
 let panel = null;
+let pill = null;
 let full = null;
 let quitting = false;
 let agents = [];
@@ -88,7 +91,7 @@ function pushState() {
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     const state = snapshot();
-    for (const win of [panel, full]) {
+    for (const win of [panel, full, pill]) {
       if (win && !win.isDestroyed()) win.webContents.send("state", state);
     }
     updateTray(state);
@@ -153,6 +156,15 @@ function trayMenu() {
       checked: !settings.get().notify,
       click: (item) => settings.set({ notify: !item.checked }).then(pushState),
     },
+    {
+      label: "Show the pill",
+      type: "checkbox",
+      checked: Boolean(settings.get().pill),
+      click: (item) => settings.set({ pill: item.checked }).then(() => {
+        syncPill();
+        pushState();
+      }),
+    },
     { type: "separator" },
     { label: "Quit foolscap", click: () => app.quit() },
   ]);
@@ -189,8 +201,10 @@ function createPanel() {
     fullscreenable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    roundedCorners: true,
-    backgroundColor: background(),
+    // The panel draws its own rounded body and shadow on a clear window.
+    transparent: true,
+    hasShadow: false,
+    backgroundColor: "#00000000",
     title: "foolscap",
     webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
@@ -201,6 +215,18 @@ function createPanel() {
     awayFrom = Date.now();
   });
   loadView(panel, "panel");
+}
+
+/** Open the panel just above the pill, inside the work area. */
+function placeAbovePill() {
+  const b = pill.getBounds();
+  const area = screen.getDisplayMatching(b).workArea;
+  const [w, h] = panel.getSize();
+  const gap = 8;
+  // The capsule sits in the window's bottom-right corner.
+  const x = Math.min(Math.max(b.x + b.width - w, area.x + gap), area.x + area.width - w - gap);
+  const y = Math.min(Math.max(b.y + b.height - 56 - h, area.y + gap), area.y + area.height - h - gap);
+  panel.setPosition(x, y);
 }
 
 /** Anchor the panel to the tray icon, inside the work area, whatever edge the taskbar is on. */
@@ -232,13 +258,71 @@ function noteReturn() {
   if (happened) away = { ...d, minutes: Math.round((Date.now() - awayFrom) / 60_000) };
 }
 
-function showPanel() {
+function showPanel({ fromPill = false } = {}) {
   noteReturn();
   if (!panel || panel.isDestroyed()) createPanel();
-  placePanel();
+  if (fromPill && pill && !pill.isDestroyed() && pill.isVisible()) placeAbovePill();
+  else placePanel();
   panel.show();
   panel.focus();
   pushState();
+}
+
+// ── The pill ─────────────────────────────────────────────────────────
+
+/** Bottom-right of the work area, above the taskbar, unless it was dragged elsewhere. */
+function pillOrigin() {
+  const saved = settings.get().pillPosition;
+  if (saved && screen.getAllDisplays().some((d) => {
+    const a = d.workArea;
+    return saved.x >= a.x && saved.y >= a.y && saved.x < a.x + a.width && saved.y < a.y + a.height;
+  })) return saved;
+  const area = screen.getPrimaryDisplay().workArea;
+  return { x: area.x + area.width - PILL_SIZE.width - 8, y: area.y + area.height - PILL_SIZE.height - 4 };
+}
+
+function createPill() {
+  const at = pillOrigin();
+  pill = new BrowserWindow({
+    ...PILL_SIZE,
+    ...at,
+    show: false,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    backgroundColor: "#00000000",
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    focusable: true,
+    title: "foolscap pill",
+    webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  pill.setAlwaysOnTop(true, "floating");
+  // Clicks pass through the clear parts of the window to whatever is under them.
+  pill.setIgnoreMouseEvents(true, { forward: true });
+  let saveTimer = null;
+  pill.on("moved", () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const [x, y] = pill.getPosition();
+      settings.set({ pillPosition: { x, y } });
+    }, 400);
+  });
+  pill.once("ready-to-show", () => pill.showInactive());
+  loadView(pill, "pill");
+}
+
+function syncPill() {
+  const want = Boolean(settings.get().pill);
+  if (want && (!pill || pill.isDestroyed())) createPill();
+  else if (!want && pill && !pill.isDestroyed()) {
+    pill.destroy();
+    pill = null;
+  }
 }
 
 function togglePanel() {
@@ -441,6 +525,14 @@ function registerIpc() {
     if (panel.isVisible()) placePanel();
   });
   ipcMain.on("view:full", (_event, focusId) => showFull(focusId ?? null));
+  ipcMain.on("view:panel", (_event, focusId) => {
+    showPanel({ fromPill: true });
+    if (focusId) panel.webContents.send("focus", focusId);
+  });
+  // The pointer is on the pill: take clicks; off it: let them through again.
+  ipcMain.on("pill:expand", (_event, open) => {
+    if (pill && !pill.isDestroyed()) pill.setIgnoreMouseEvents(!open, { forward: true });
+  });
   ipcMain.on("view:hidePanel", () => panel?.hide());
   ipcMain.on("app:quit", () => app.quit());
 }
@@ -524,6 +616,7 @@ if (!app.requestSingleInstanceLock()) {
     applySettings();
     createTray();
     createPanel();
+    syncPill();
     updateTray();
     log(`ready · relay ${relay.url}`);
   });

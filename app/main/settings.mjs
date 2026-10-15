@@ -24,6 +24,9 @@ export const DEFAULTS = {
   terminalSessions: false,
   hookPort: 47821,
   hookToken: null,
+  // The pill: a small live capsule above the taskbar, and where it was dragged to.
+  pill: true,
+  pillPosition: null,
 };
 
 export class Settings {

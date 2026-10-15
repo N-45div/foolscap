@@ -66,6 +66,7 @@ export interface Settings {
   openAtLogin: boolean;
   notify: boolean;
   theme: "system" | "dark" | "light";
+  pill: boolean;
   shortcut: string;
 }
 
@@ -138,6 +139,8 @@ export interface Bridge {
   voiceFinish(id: string, body: { transcript: string; audioSeconds: number; alternates?: string[] }): Result<{ result: { text: string; words: number } }>;
   panelHeight(height: number): void;
   openFull(focusId?: string): void;
+  openPanel(focusId?: string): void;
+  pillExpand(open: boolean): void;
   hidePanel(): void;
   quit(): void;
   onState(fn: (state: AppState) => void): () => void;

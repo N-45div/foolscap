@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld("foolscap", {
   voiceFinish: call("voice:finish"),
   panelHeight: (height) => ipcRenderer.send("panel:height", height),
   openFull: (focusId) => ipcRenderer.send("view:full", focusId),
+  openPanel: (focusId) => ipcRenderer.send("view:panel", focusId),
+  pillExpand: (open) => ipcRenderer.send("pill:expand", Boolean(open)),
   hidePanel: () => ipcRenderer.send("view:hidePanel"),
   quit: () => ipcRenderer.send("app:quit"),
   onState: (fn) => {
