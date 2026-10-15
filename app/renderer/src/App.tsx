@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { api, type AppState } from "./api";
 import { Full } from "./Full";
 import { Panel } from "./Panel";
+import { Pill } from "./Pill";
 
-const view = new URLSearchParams(location.search).get("view") === "full" ? "full" : "panel";
+const asked = new URLSearchParams(location.search).get("view");
+const view = asked === "full" || asked === "pill" ? asked : "panel";
 
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -26,6 +28,11 @@ export function App() {
     else document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  useEffect(() => {
+    document.body.classList.add(`view-${view}`);
+  }, []);
+
   if (!state) return null;
+  if (view === "pill") return <Pill state={state} />;
   return view === "full" ? <Full state={state} focus={focus} setFocus={setFocus} /> : <Panel state={state} focus={focus} />;
 }

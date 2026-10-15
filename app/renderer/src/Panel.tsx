@@ -1,11 +1,12 @@
 /** The tray panel: your move on top, the agents' move below, the next task at the bottom. */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, duration, type AppState, type Licence, type Session, type Settings } from "./api";
-import { Card, Quiet } from "./Card";
+import { Card } from "./Card";
 import { Composer } from "./Composer";
 import { Bell, BellOff, Expand, Gear, Sheet } from "./icons";
 import { LicenceBanner, LicenceSettings } from "./Licence";
 import { TerminalSessionsSetting } from "./Terminal";
+import { Orbit } from "./Orbit";
 
 export const yourMove = (sessions: Session[]) => sessions.filter((s) => s.attention.tier <= 1);
 export const agentsMove = (sessions: Session[]) => sessions.filter((s) => s.attention.tier >= 2);
@@ -172,13 +173,21 @@ export function Panel({ state, focus }: { state: AppState; focus: string | null 
   const root = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const yours = yourMove(state.sessions);
-  const theirs = agentsMove(state.sessions);
+  const [picked, setPicked] = useState<string | null>(null);
+  // The selected planet: the one picked, else the one the app pointed at, else the most urgent.
+  const selected =
+    state.sessions.find((s) => s.id === picked) ??
+    state.sessions.find((s) => s.id === focus) ??
+    yours[0] ??
+    state.sessions[0] ??
+    null;
 
   // The window is as tall as what it shows.
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
-    const report = () => api().panelHeight(el.getBoundingClientRect().height);
+    // Plus the margin the shadow lives in.
+    const report = () => api().panelHeight(el.getBoundingClientRect().height + 20);
     report();
     const observer = new ResizeObserver(report);
     observer.observe(el);
@@ -191,6 +200,14 @@ export function Panel({ state, focus }: { state: AppState; focus: string | null 
       const target = e.target as HTMLElement;
       if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (e.key === "Escape") return api().hidePanel();
+      // Tab walks the planets, most urgent first.
+      if (e.key === "Tab" && state.sessions.length) {
+        e.preventDefault();
+        const order = state.sessions;
+        const at = order.findIndex((s) => s.id === selected?.id);
+        setPicked(order[(at + (e.shiftKey ? order.length - 1 : 1)) % order.length].id);
+        return;
+      }
       const asking = yours.find((s) => s.pendingPermission && s.pendingPermission.answer !== "text");
       if (!asking?.pendingPermission) return;
       const options = asking.pendingPermission.options;
@@ -199,39 +216,25 @@ export function Panel({ state, focus }: { state: AppState; focus: string | null 
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [yours]);
+  }, [yours, state.sessions, selected]);
 
   return (
     <div className="panel" ref={root}>
       <Header state={state} onSettings={() => setSettingsOpen(!settingsOpen)} />
       <div className="rule" />
       <Away state={state} />
-      {yours.length ? (
+      {state.sessions.length ? (
         <>
-          <div className="section-head">
-            <h2>Your move</h2>
-            {yours.some((s) => s.pendingPermission) && <span className="keys">A approve · D deny</span>}
-          </div>
-          <div className="cards">
-            {yours.map((s, i) => (
-              <Card key={s.id} s={s} focused={focus ? focus === s.id : i === 0} />
-            ))}
-          </div>
+          <Orbit sessions={state.sessions} selected={selected?.id ?? null} onSelect={setPicked} needs={state.counts.needs} />
+          {selected && (
+            <div className="selected-card">
+              <Card s={selected} focused />
+            </div>
+          )}
+          <div className="orbit-hint">Tab walks the planets{selected?.pendingPermission ? " · A approve · D deny" : ""}</div>
         </>
       ) : (
         <Calm state={state} />
-      )}
-      {theirs.length > 0 && (
-        <>
-          <div className="section-head">
-            <h2>Agents' move</h2>
-          </div>
-          <ul className="list">
-            {theirs.map((s) => (
-              <Quiet key={s.id} s={s} />
-            ))}
-          </ul>
-        </>
       )}
       <LicenceBanner licence={state.licence} />
       <Composer state={state} />
