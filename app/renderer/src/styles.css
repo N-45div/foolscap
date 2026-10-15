@@ -160,6 +160,8 @@ code.cmd { align-self: flex-start; font-family: var(--mono); font-size: 12px; pa
 }
 
 /* ── Transparent windows: the panel floats with its own shadow; the pill floats alone ── */
+/* The root's background paints the whole window, so it has to go clear too. */
+html:has(> body.view-panel), html:has(> body.view-pill),
 body.view-panel, body.view-pill { background: transparent; }
 body.view-panel .panel {
   margin: 10px;
