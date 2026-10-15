@@ -5,8 +5,10 @@
  *   middle ring  working (an arc shows how long it has been running)
  *   outer ring   done and quiet
  *
- * Positions are stable: a planet keeps its angle from its id, so the
- * picture does not reshuffle every time something changes.
+ * Positions are stable: every task has its own angle, in id order, so
+ * when its state changes it moves straight in or out along its own ray
+ * and never lands on another task. The top of the dial is left clear for
+ * the ring names.
  */
 import { ago, type Session } from "./api";
 
@@ -26,19 +28,21 @@ function glyph(s: Session) {
   return (s.agentLabel.trim()[0] ?? "?").toUpperCase();
 }
 
-/** A steady angle per id, spread evenly with its ring-mates. */
+/** Degrees either side of twelve o'clock kept free for the ring names. */
+const TOP_GAP = 40;
+
+/** One angle per task, in id order, spread over the dial below the names. */
 function angles(items: Session[]): Map<string, number> {
   const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
-  const seed = sorted.length ? [...sorted[0].id].reduce((n, ch) => n + ch.charCodeAt(0), 0) : 0;
-  const start = ((seed % 360) * Math.PI) / 180;
-  return new Map(sorted.map((s, i) => [s.id, start + (i * 2 * Math.PI) / sorted.length]));
+  const step = (360 - 2 * TOP_GAP) / Math.max(1, sorted.length);
+  return new Map(sorted.map((s, i) => [s.id, ((-90 + TOP_GAP + (i + 0.5) * step) * Math.PI) / 180]));
 }
 
 function isRed(s: Session) {
   return s.verified?.verdict === "red" || s.status === "error" || Boolean(s.held) || s.evidence.testsFailed > 0;
 }
 
-function Planet({ s, x, y, selected, onSelect }: { s: Session; x: number; y: number; selected: boolean; onSelect: () => void }) {
+function Planet({ s, x, y, angle, selected, onSelect }: { s: Session; x: number; y: number; angle: number; selected: boolean; onSelect: () => void }) {
   const ring = ringOf(s);
   const r = ring === 0 ? 22 : ring === 1 ? 18 : 14;
   const red = isRed(s);
@@ -47,6 +51,10 @@ function Planet({ s, x, y, selected, onSelect }: { s: Session; x: number; y: num
   const circumference = 2 * Math.PI * r;
   const run = Math.min(1, minutes / 30) * circumference; // a full ring at 30 minutes
   const label = s.name.length > 18 ? `${s.name.slice(0, 17)}…` : s.name;
+  // Labels sit on the side away from the centre: above a planet in the top
+  // half, below one elsewhere, so they never run under the core.
+  const above = Math.sin(angle) < -0.2;
+  const labelY = above ? y - r - (ring === 1 ? 20 : 7) : y + r + 15;
   return (
     <g
       role="button"
@@ -84,11 +92,11 @@ function Planet({ s, x, y, selected, onSelect }: { s: Session; x: number; y: num
           {glyph(s)}
         </text>
       )}
-      <text x={x} y={y + r + 15} textAnchor="middle" fontSize="11" fill={ring === 0 ? "var(--ink)" : "var(--ink-3)"}>
+      <text x={x} y={labelY} textAnchor="middle" fontSize="11" fill={ring === 0 ? "var(--ink)" : "var(--ink-3)"}>
         {label}
       </text>
       {ring === 1 && (
-        <text x={x} y={y + r + 28} textAnchor="middle" fontSize="10" fontFamily="var(--mono)" fill="var(--ink-3)">
+        <text x={x} y={labelY + 13} textAnchor="middle" fontSize="10" fontFamily="var(--mono)" fill="var(--ink-3)">
           {ago(s.turnStartedAt)}
           {s.queue.length ? ` · ${s.queue.length}⏭` : ""}
         </text>
@@ -98,7 +106,7 @@ function Planet({ s, x, y, selected, onSelect }: { s: Session; x: number; y: num
 }
 
 export function Orbit({ sessions, selected, onSelect, needs }: { sessions: Session[]; selected: string | null; onSelect: (id: string) => void; needs: number }) {
-  const rings = [0, 1, 2].map((ring) => sessions.filter((s) => ringOf(s) === ring));
+  const at = angles(sessions);
   return (
     <svg className="orbit" viewBox={`0 0 ${SIZE} ${SIZE}`} width="100%" role="group" aria-label="Your agents, closest are the ones that need you">
       <defs>
@@ -116,22 +124,6 @@ export function Orbit({ sessions, selected, onSelect, needs }: { sessions: Sessi
           {name}
         </text>
       ))}
-      {rings.map((items, ring) => {
-        const at = angles(items);
-        return items.map((s) => {
-          const a = at.get(s.id) ?? 0;
-          return (
-            <Planet
-              key={s.id}
-              s={s}
-              x={C + RINGS[ring] * Math.cos(a)}
-              y={C + RINGS[ring] * Math.sin(a)}
-              selected={selected === s.id}
-              onSelect={() => onSelect(s.id)}
-            />
-          );
-        });
-      })}
       <circle cx={C} cy={C} r={34} fill="var(--raised)" stroke="var(--line)" />
       <text x={C} y={C + 8} textAnchor="middle" fontSize="26" fontWeight="600" fontFamily="var(--mono)" fill={needs ? "var(--accent)" : "var(--ink-3)"}>
         {needs}
@@ -139,6 +131,21 @@ export function Orbit({ sessions, selected, onSelect, needs }: { sessions: Sessi
       <text x={C} y={C + 50} textAnchor="middle" fontSize="10" fill="var(--ink-3)">
         {needs ? (needs === 1 ? "needs you" : "need you") : "all quiet"}
       </text>
+      {sessions.map((s) => {
+        const a = at.get(s.id) ?? 0;
+        const radius = RINGS[ringOf(s)];
+        return (
+          <Planet
+            key={s.id}
+            s={s}
+            x={C + radius * Math.cos(a)}
+            y={C + radius * Math.sin(a)}
+            angle={a}
+            selected={selected === s.id}
+            onSelect={() => onSelect(s.id)}
+          />
+        );
+      })}
     </svg>
   );
 }
