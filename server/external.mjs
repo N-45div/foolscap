@@ -234,7 +234,7 @@ export class ExternalSessions extends EventEmitter {
     const requestId = payload.tool_use_id ?? `ext-${Date.now()}`;
     s.pendingPermission = {
       requestId,
-      toolCall: { title: titleOf(payload.tool_name, payload.tool_input) || payload.tool_name || "tool", kind: "other" },
+      toolCall: { title: titleOf(payload.tool_name, payload.tool_input, payload.cwd ?? s.cwd) || payload.tool_name || "tool", kind: "other" },
       options: [
         { optionId: "allow_once", name: "Allow", kind: "allow_once" },
         { optionId: "reject_once", name: "Deny", kind: "reject_once" },

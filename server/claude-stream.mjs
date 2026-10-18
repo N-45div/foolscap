@@ -62,7 +62,9 @@ export function titleOf(name, input, cwd = null) {
 }
 
 export class ClaudeStreamBuilder {
-  constructor() {
+  /** `cwd`: the task's folder, so tool titles name files from it. */
+  constructor({ cwd = null } = {}) {
+    this.cwd = cwd;
     this.cells = [];
     this.current = null;
     this.toolsById = new Map();
@@ -126,7 +128,7 @@ export class ClaudeStreamBuilder {
             const tool = {
               id: b.id,
               name: b.name ?? "tool",
-              input: { title: titleOf(b.name, input), ...input },
+              input: { title: titleOf(b.name, input, this.cwd), ...input },
               isError: false,
               status: "in_progress",
             };

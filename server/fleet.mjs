@@ -255,7 +255,7 @@ export class AgentSession extends EventEmitter {
     if (this.driverKind === "claude") {
       this.label = entry.label;
       this.driver = createClaudeDriver({ id, cwd, fleetUrl: relay?.url, fleetToken: relay?.token, settingSources, ...hooks });
-      this.builder = new ClaudeStreamBuilder();
+      this.builder = new ClaudeStreamBuilder({ cwd });
     } else if (this.driverKind === "codex-exec") {
       this.label = entry.label;
       this.driver = createCodexExecDriver({ cwd, model: codexModel, ...hooks });
@@ -486,12 +486,20 @@ export class AgentSession extends EventEmitter {
     if (["starting", "working", "blocked", "checking"].includes(this.status)) throw new Error("wait for the agent to finish first");
     const asked = this.builder.cells[0]?.prompt ?? this.name;
     const subject = clip(`${this.label}: ${asked.split(/\r?\n/)[0].trim()}`, 72);
-    const sha = await mergeWorktree(this.worktree, { message: subject });
+    // The body tells the whole story: every prompt sent, and the last check.
+    const prompts = this.builder.cells.map((c) => c.prompt?.trim()).filter(Boolean);
+    const body = [
+      prompts.length > 1 ? `Prompts:\n${prompts.map((p) => `- ${p.split(/\r?\n/)[0]}`).join("\n")}` : null,
+      this.verified ? `Checked by foolscap: ${this.verified.line ?? "tests"} ${this.verified.verdict}, ${this.verified.reason}.` : null,
+    ].filter(Boolean).join("\n\n");
+    const sha = await mergeWorktree(this.worktree, { message: body ? `${subject}\n\n${body}` : subject });
     this.emit("event", { type: "merged", sha, ...(this.changes ?? {}) });
     this.merged = sha;
     // The agent goes first: on Windows its process holds the folder open.
+    // Only the process stops; the task stays "done" until it is removed, so
+    // nothing flashes as exited.
     const worktree = this.worktree;
-    this.close();
+    this.driver.close();
     await removeWorktree(worktree);
     this.worktree = null;
     this.changed();
