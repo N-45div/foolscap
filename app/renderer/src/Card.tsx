@@ -101,7 +101,7 @@ export function Card({ s, focused = false }: { s: Session; focused?: boolean }) 
 
         {saying ? (
           <Say
-            placeholder={saying === "reply" ? (s.external ? "Sent when it next stops…" : `Reply to ${s.name}…`) : "Then…"}
+            placeholder={saying === "reply" ? (s.external ? "Sent when it next stops…" : `Reply to ${s.name.replace(/…$/, "")}…`) : "Then…"}
             onSend={(text) => (saying === "reply" ? api().prompt(s.id, text) : api().enqueue(s.id, text))}
             onDone={() => setSaying(null)}
           />
