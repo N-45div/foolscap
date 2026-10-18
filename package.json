@@ -109,5 +109,5 @@
       "artifactName": "foolscap-${arch}.${ext}"
     }
   },
-  "homepage": "https://foolscap-topaz.vercel.app"
+  "homepage": "https://foolscap.dev"
 }
