@@ -107,6 +107,7 @@ export function Composer({ state }: { state: AppState }) {
               key={i}
               value={t}
               aria-label={`Then, step ${i + 1}`}
+              autoFocus
               placeholder="Then, once the tests pass…"
               onChange={(e) => setThens(thens.map((x, j) => (j === i ? e.target.value : x)))}
             />

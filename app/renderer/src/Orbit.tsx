@@ -125,10 +125,10 @@ export function Orbit({ sessions, selected, onSelect, needs }: { sessions: Sessi
         </text>
       ))}
       <circle cx={C} cy={C} r={34} fill="var(--raised)" stroke="var(--line)" />
-      <text x={C} y={C + 8} textAnchor="middle" fontSize="26" fontWeight="600" fontFamily="var(--mono)" fill={needs ? "var(--accent)" : "var(--ink-3)"}>
+      <text x={C} y={C + 5} textAnchor="middle" fontSize="24" fontWeight="600" fontFamily="var(--mono)" fill={needs ? "var(--accent)" : "var(--ink-3)"}>
         {needs}
       </text>
-      <text x={C} y={C + 50} textAnchor="middle" fontSize="10" fill="var(--ink-3)">
+      <text x={C} y={C + 20} textAnchor="middle" fontSize="8.5" fill="var(--ink-3)">
         {needs ? (needs === 1 ? "needs you" : "need you") : "all quiet"}
       </text>
       {sessions.map((s) => {
