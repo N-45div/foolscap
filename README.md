@@ -144,9 +144,9 @@ is how foolscap is paid for, once, with no subscription:
 
 Official builds start with a 14-day free trial. After it, tasks already
 running finish and new ones need a key; a build you make yourself never
-asks. Keys are checked with [Polar](https://polar.sh): only the key, its
-activation and your computer's name are sent, and a key keeps working
-offline for 7 days after its last check.
+asks. Keys are checked with [Dodo Payments](https://dodopayments.com):
+only the key, its activation and your computer's name are sent, and a key
+keeps working offline for 7 days after its last check.
 
 **Voice prompts.** Click the mic in the new-task line, talk (Hinglish
 welcome), click again, and a clean prompt lands in the box. The audio is

@@ -8,6 +8,7 @@ const PLAN_NAME: Record<Licence["plan"], string> = {
   expired: "Trial ended",
   app: "foolscap, lifetime",
   "app+voice": "foolscap + Voice, lifetime",
+  voice: "foolscap Voice subscription",
 };
 
 /** Paste a key, activate it on this computer. */
@@ -97,7 +98,7 @@ export function LicenceSettings({ licence }: { licence: Licence }) {
       </div>
     );
   }
-  const owned = licence.plan === "app" || licence.plan === "app+voice";
+  const owned = licence.plan === "app" || licence.plan === "app+voice" || licence.plan === "voice";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -116,7 +117,7 @@ export function LicenceSettings({ licence }: { licence: Licence }) {
             <button className="btn" onClick={() => api().openLink("appVoice")}>Get foolscap + Voice</button>
           )}
           {licence.links.portal && (
-            <button className="btn quiet" onClick={() => api().openLink("portal")}>Manage in Polar</button>
+            <button className="btn quiet" onClick={() => api().openLink("portal")}>Manage your licence</button>
           )}
           <button className="btn quiet" onClick={() => api().deactivateKey()}>Remove from this computer</button>
         </div>

@@ -1,38 +1,42 @@
 /**
- * Paying for foolscap: a 14-day trial, then a Polar licence key.
+ * Paying for foolscap: a 14-day trial, then a Dodo Payments licence key.
  *
  * The code is open source, and a build you make yourself is never gated.
- * The official builds (signed installer, auto-updates, the Store) are
- * what people pay for: $9 for the first 50 early buyers, then $19, for
- * the app forever; $99 for the app plus voice forever.
+ * The official installers are what people pay for: $9 for the first 50
+ * early buyers, then $19, for the app forever; $99 for the app plus voice
+ * forever; or the voice subscription, which includes the app while it runs.
  *
- * A key is checked against Polar's customer-portal licence endpoints,
- * which take the organisation id and the key and need no secret, so
- * nothing private ships in the app. A key is activated once per computer
- * (Polar enforces the limit), checked again weekly, and keeps working
- * offline for 7 days after the last good check. We send the key, the
- * activation id and the computer's name, nothing else.
+ * Keys are checked with Dodo's public licence endpoints (activate,
+ * validate, deactivate), which need no API key, so nothing secret ships in
+ * the app. Activating tells us which product the key belongs to, and so
+ * the plan. A key is activated once per computer (Dodo enforces the
+ * limit), checked again weekly, and keeps working offline for 7 days after
+ * the last good check. We send the key, its instance id and the computer's
+ * name, nothing else.
  *
- * Until app/main/polar.json is filled in, licensing is off entirely.
+ * Until app/main/dodo.json names the products, licensing is off entirely.
  */
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 
-const API = "https://api.polar.sh/v1/customer-portal/license-keys";
+const BASE = { live: "https://live.dodopayments.com", test: "https://test.dodopayments.com" };
 const DAY = 86_400_000;
 export const TRIAL_DAYS = 14;
 const GRACE_DAYS = 7;
 const RECHECK_DAYS = 7;
+const PLANS = new Set(["app", "app+voice", "voice"]);
 
 const placeholder = (value) => typeof value !== "string" || !value.trim() || value.startsWith("[");
 
-/** Polar's refusals, in words a buyer can act on. */
+/** Dodo's refusals, in words a buyer can act on. */
 function readable(status, body) {
-  const detail = typeof body?.detail === "string" ? body.detail : "";
-  if (status === 404) return "That key was not found. Check it against your Polar receipt.";
-  if (status === 403 && /limit/i.test(detail)) return "That key is already active on its maximum number of computers. Free one in your Polar customer portal.";
-  if (status === 422) return "That does not look like a foolscap key.";
-  return detail || `Polar answered ${status}.`;
+  const detail = typeof body?.message === "string" ? body.message : typeof body?.detail === "string" ? body.detail : "";
+  if (status === 404) return "That key was not found. Check it against your email from Dodo Payments.";
+  if (status === 403) return /limit|maximum/i.test(detail)
+    ? "That key is already active on its maximum number of computers. Remove it from one first."
+    : "That key is not active any more: it was refunded, cancelled or revoked.";
+  if (status === 422 || status === 400) return "That does not look like a foolscap key.";
+  return detail || `Dodo Payments answered ${status}.`;
 }
 
 export class Licence {
@@ -42,13 +46,22 @@ export class Licence {
     this.packaged = packaged;
     this.fetch = fetch;
     this.now = now;
-    this.state = {}; // { firstRunAt, key, activationId, benefitId, status, lastValidatedAt, lastError }
+    this.state = {}; // { firstRunAt, key, instanceId, licenseKeyId, productId, status, lastValidatedAt, lastError }
     this.offline = false;
   }
 
-  /** Licensing applies only to official builds with Polar configured. */
+  /** The products dodo.json maps to plans, without the placeholders. */
+  get products() {
+    return Object.fromEntries(Object.entries(this.config.products ?? {}).filter(([id, plan]) => !placeholder(id) && PLANS.has(plan)));
+  }
+
+  /** Licensing applies only to official builds with Dodo products configured. */
   get gated() {
-    return Boolean(this.packaged) && !placeholder(this.config.organizationId);
+    return Boolean(this.packaged) && Object.keys(this.products).length > 0;
+  }
+
+  get base() {
+    return BASE[this.config.mode === "test" ? "test" : "live"];
   }
 
   async load() {
@@ -70,16 +83,15 @@ export class Licence {
     await rename(temp, this.file);
   }
 
-  /** The plan a granted key unlocks; a key we cannot map still unlocks the app. */
-  planFor(benefitId) {
-    const plan = this.config.benefits?.[benefitId];
-    return plan === "app+voice" ? "app+voice" : "app";
+  /** The plan a key's product unlocks; a product we cannot map still unlocks the app. */
+  planFor(productId) {
+    return this.products[productId] ?? "app";
   }
 
   /** Does the key still count, given when it was last confirmed? */
   keyHolds() {
     const s = this.state;
-    if (!s.key || s.status !== "granted" || !s.lastValidatedAt) return false;
+    if (!s.key || s.status !== "active" || !s.lastValidatedAt) return false;
     return this.now() - Date.parse(s.lastValidatedAt) < (RECHECK_DAYS + GRACE_DAYS) * DAY;
   }
 
@@ -93,8 +105,8 @@ export class Licence {
     const base = { gated: this.gated, key, links, lastError: this.state.lastError ?? null, offline: this.offline };
     if (!this.gated) return { ...base, plan: "source", voice: false, trialDaysLeft: null };
     if (this.keyHolds()) {
-      const plan = this.planFor(this.state.benefitId);
-      return { ...base, plan, voice: plan === "app+voice", trialDaysLeft: null, lastValidatedAt: this.state.lastValidatedAt };
+      const plan = this.planFor(this.state.productId);
+      return { ...base, plan, voice: plan !== "app", trialDaysLeft: null, lastValidatedAt: this.state.lastValidatedAt };
     }
     if (trialDaysLeft > 0) return { ...base, plan: "trial", voice: false, trialDaysLeft };
     return { ...base, plan: "expired", voice: false, trialDaysLeft: 0 };
@@ -106,10 +118,10 @@ export class Licence {
   }
 
   async call(path, body) {
-    const res = await this.fetch(`${API}/${path}`, {
+    const res = await this.fetch(`${this.base}/licenses/${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ organization_id: this.config.organizationId, ...body }),
+      body: JSON.stringify(body),
     });
     let data = null;
     try {
@@ -121,34 +133,47 @@ export class Licence {
     return data ?? {};
   }
 
-  /** Activate a key on this computer, then confirm it. */
+  /** Activate a key on this computer. Dodo answers with the key's product. */
   async activate(rawKey) {
     const key = String(rawKey ?? "").trim();
-    if (!key) throw new Error("Paste the key from your Polar receipt.");
+    if (!key) throw new Error("Paste the key from your email from Dodo Payments.");
     if (!this.gated) throw new Error("This build is not gated: building foolscap yourself needs no key.");
-    const activation = await this.call("activate", { key, label: hostname().slice(0, 100) });
-    this.state = { ...this.state, key, activationId: activation.id ?? null, lastError: null };
-    await this.validate({ force: true });
-    if (this.state.status !== "granted") throw new Error(this.state.lastError ?? "That key is not active.");
+    const instance = await this.call("activate", { license_key: key, name: hostname().slice(0, 100) || "computer" });
+    this.state = {
+      ...this.state,
+      key,
+      instanceId: instance.id ?? null,
+      licenseKeyId: instance.license_key_id ?? null,
+      productId: instance.product?.product_id ?? null,
+      status: "active",
+      lastValidatedAt: new Date(this.now()).toISOString(),
+      lastError: null,
+    };
+    this.offline = false;
+    await this.save();
     return this.status();
   }
 
-  /** Re-check the key with Polar, at most weekly unless forced. */
+  /** Re-check the key with Dodo, at most weekly unless forced. */
   async validate({ force = false } = {}) {
     const s = this.state;
     if (!this.gated || !s.key) return this.status();
     if (!force && s.lastValidatedAt && this.now() - Date.parse(s.lastValidatedAt) < RECHECK_DAYS * DAY) return this.status();
     try {
-      const data = await this.call("validate", { key: s.key, ...(s.activationId ? { activation_id: s.activationId } : {}) });
+      const data = await this.call("validate", { license_key: s.key, ...(s.instanceId ? { license_key_instance_id: s.instanceId } : {}) });
       this.offline = false;
-      s.status = data.status ?? "granted";
-      s.benefitId = data.benefit_id ?? data.license_key?.benefit_id ?? s.benefitId ?? null;
-      s.lastValidatedAt = new Date(this.now()).toISOString();
-      s.lastError = s.status === "granted" ? null : `This key is ${s.status}.`;
+      if (data.valid === true) {
+        s.status = "active";
+        s.lastValidatedAt = new Date(this.now()).toISOString();
+        s.lastError = null;
+      } else {
+        s.status = "disabled";
+        s.lastError = "This key is not active any more: it was refunded, cancelled or revoked.";
+      }
     } catch (err) {
       if (err.status) {
-        // Polar answered: the key is not good any more.
-        s.status = "revoked";
+        // Dodo answered: the key is not good any more.
+        s.status = "disabled";
         s.lastError = err.message;
       } else {
         // No answer: keep the last good check until the grace period runs out.
@@ -162,8 +187,8 @@ export class Licence {
   /** Free this computer's slot and forget the key here. */
   async deactivate() {
     const s = this.state;
-    if (s.key && s.activationId && this.gated) {
-      await this.call("deactivate", { key: s.key, activation_id: s.activationId }).catch(() => {});
+    if (s.key && s.instanceId && this.gated) {
+      await this.call("deactivate", { license_key: s.key, license_key_instance_id: s.instanceId }).catch(() => {});
     }
     this.state = { firstRunAt: s.firstRunAt };
     await this.save();

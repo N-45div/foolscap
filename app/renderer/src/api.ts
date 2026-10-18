@@ -73,11 +73,11 @@ export interface Settings {
 export interface Licence {
   gated: boolean;
   /** source: a build you made yourself, never gated. */
-  plan: "source" | "trial" | "expired" | "app" | "app+voice";
+  plan: "source" | "trial" | "expired" | "app" | "app+voice" | "voice";
   voice: boolean;
   trialDaysLeft: number | null;
   key: string | null;
-  links: { app?: string | null; appVoice?: string | null; portal?: string | null };
+  links: { app?: string | null; appVoice?: string | null; voice?: string | null; portal?: string | null };
   lastError: string | null;
   offline: boolean;
 }
@@ -129,7 +129,7 @@ export interface Bridge {
   activateKey(key: string): Result<{ licence: Licence }>;
   deactivateKey(): Result<{ licence: Licence }>;
   checkKey(): Result<{ licence: Licence }>;
-  openLink(which: "app" | "appVoice" | "portal"): Result;
+  openLink(which: "app" | "appVoice" | "voice" | "portal"): Result;
   hooksPlan(): Result<{ plan: { file: string; adds: unknown } }>;
   hooksEnable(): Result;
   hooksDisable(): Result;

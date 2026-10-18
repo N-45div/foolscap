@@ -509,7 +509,7 @@ function registerIpc() {
   handle("licence:activate", async (key) => ({ licence: await licence.activate(key) }));
   handle("licence:deactivate", async () => ({ licence: await licence.deactivate() }));
   handle("licence:refresh", async () => ({ licence: await licence.validate({ force: true }) }));
-  // Only the purchase and portal links from polar.json open, and only over https.
+  // Only the purchase and portal links from dodo.json open, and only over https.
   handle("licence:open", (which) => {
     const url = licence.status().links?.[which];
     if (!url || !url.startsWith("https://")) throw new Error("that link is not set up yet");
@@ -574,8 +574,8 @@ if (!app.requestSingleInstanceLock()) {
     await settings.load();
     journal = await new Journal(join(app.getPath("userData"), "journal.jsonl")).load();
 
-    const polar = JSON.parse(await readFile(join(HERE, "polar.json"), "utf8"));
-    licence = new Licence({ file: join(app.getPath("userData"), "licence.json"), config: polar, packaged: app.isPackaged });
+    const dodo = JSON.parse(await readFile(join(HERE, "dodo.json"), "utf8"));
+    licence = new Licence({ file: join(app.getPath("userData"), "licence.json"), config: dodo, packaged: app.isPackaged });
     await licence.load();
     voice = new VoiceClient({ config: JSON.parse(await readFile(join(HERE, "cloud.json"), "utf8")), licence });
     const recheck = () => licence.validate().then(pushState).catch((err) => log(`licence check: ${err.message}`));

@@ -1,0 +1,14 @@
+{
+  "mode": "live",
+  "products": {
+    "[DODO PRODUCT ID OF FOOLSCAP]": "app",
+    "[DODO PRODUCT ID OF FOOLSCAP + VOICE]": "app+voice",
+    "[DODO PRODUCT ID OF THE VOICE SUBSCRIPTION]": "voice"
+  },
+  "links": {
+    "app": "[DODO PAYMENT LINK FOR FOOLSCAP]",
+    "appVoice": "[DODO PAYMENT LINK FOR FOOLSCAP + VOICE]",
+    "voice": "[DODO PAYMENT LINK FOR THE VOICE SUBSCRIPTION]",
+    "portal": "[DODO CUSTOMER PORTAL LINK]"
+  }
+}

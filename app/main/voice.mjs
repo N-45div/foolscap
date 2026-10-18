@@ -36,8 +36,13 @@ export class VoiceClient {
   }
 
   headers(extra = {}) {
-    const { key, activationId } = this.licence.state ?? {};
-    return { "x-foolscap-key": key, ...(activationId ? { "x-foolscap-activation": activationId } : {}), ...extra };
+    const { key, instanceId, licenseKeyId } = this.licence.state ?? {};
+    return {
+      "x-foolscap-key": key,
+      ...(instanceId ? { "x-foolscap-activation": instanceId } : {}),
+      ...(licenseKeyId ? { "x-foolscap-license": licenseKeyId } : {}),
+      ...extra,
+    };
   }
 
   async call(path, init) {
