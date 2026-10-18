@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { Fleet } from "../server/fleet.mjs";
 import { attention } from "../server/attention.mjs";
 import { ClaudeStreamBuilder } from "../server/claude-stream.mjs";
+import { userMemoryExcludes } from "../server/drivers/claude.mjs";
 
 process.env.FOOLSCAP_CLAUDE = `node ${join(import.meta.dirname, "fake-claude-stream.mjs")}`;
 
@@ -60,6 +61,13 @@ test("builder: stream-json becomes cells with tools paired and a stop reason", (
   assert.equal(b.model, "claude-x");
   assert.equal(b.totalOutputTokens, 5);
   assert.equal(b.costUsd, 0.01);
+});
+
+test("with the person's settings off, their own CLAUDE.md and rules are excluded, wherever the config lives", () => {
+  assert.deepEqual(userMemoryExcludes({ CLAUDE_CONFIG_DIR: "D:\\cfg\\claude\\" }), ["D:/cfg/claude/CLAUDE.md", "D:/cfg/claude/rules/**"]);
+  const own = userMemoryExcludes({});
+  assert.match(own[0], /\/\.claude\/CLAUDE\.md$/);
+  assert.ok(!own[0].includes("\\"), "forward slashes only");
 });
 
 test("the native driver boots, runs a turn, and reads evidence from Claude Code's own tool names", async () => {

@@ -84,7 +84,7 @@ export function SettingsSheet({ settings, licence, hooks }: { settings: Settings
         <span>
           Use my Claude Code settings and CLAUDE.md
           <br />
-          <span className="hint">Off starts Claude Code with only the repo's own settings.</span>
+          <span className="hint">Off starts Claude Code with only the repo's own settings and CLAUDE.md, none of yours.</span>
         </span>
         <input type="checkbox" checked={settings.useMySettings} onChange={(e) => set({ useMySettings: e.target.checked })} />
       </label>

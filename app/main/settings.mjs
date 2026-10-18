@@ -13,7 +13,8 @@ export const DEFAULTS = {
   repos: [], // [{ path, name }]
   defaultAgent: "claude",
   // Start Claude Code with the person's own settings and CLAUDE.md. Off
-  // runs it with --setting-sources project,local.
+  // runs it with --setting-sources project,local and claudeMdExcludes for
+  // ~/.claude/CLAUDE.md and rules (see userMemoryExcludes).
   useMySettings: true,
   codexModel: null, // null: whatever ~/.codex/config.toml says
   openAtLogin: true,

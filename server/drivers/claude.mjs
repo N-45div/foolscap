@@ -51,6 +51,18 @@ function kindOf(name) {
 }
 
 /**
+ * The person's own memory files. `--setting-sources` does not cover them:
+ * on 18 Oct a session started with "project,local" still read
+ * ~/.claude/CLAUDE.md (instructions to file every task on a work board).
+ * Claude Code's claudeMdExcludes keeps them out, while the repo's own
+ * CLAUDE.md and .claude/CLAUDE.md still load.
+ */
+export function userMemoryExcludes(env = process.env) {
+  const dir = (env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude")).replace(/\\/g, "/").replace(/\/$/, "");
+  return [`${dir}/CLAUDE.md`, `${dir}/rules/**`];
+}
+
+/**
  * @param {string | null} [opts.settingSources] e.g. "project,local" to start
  *   Claude Code without the user's own settings; null keeps them all.
  */
@@ -61,6 +73,7 @@ export function createClaudeDriver({ id, cwd, fleetUrl, fleetToken, settingSourc
   let turn = null; // { resolve, reject } for the in-flight prompt
   const decisions = new Map(); // requestId → null | boolean
   const mcpFile = join(homedir(), ".foolscap", `mcp-${id}.json`);
+  const settingsFile = join(homedir(), ".foolscap", `settings-${id}.json`);
   const driver = { kind: "claude", sessionId: null };
 
   function receive(msg) {
@@ -88,7 +101,14 @@ export function createClaudeDriver({ id, cwd, fleetUrl, fleetToken, settingSourc
       "stream-json",
       "--verbose",
     ];
-    if (settingSources) args.push("--setting-sources", settingSources);
+    if (settingSources) {
+      args.push("--setting-sources", settingSources);
+      if (!settingSources.split(",").includes("user")) {
+        await mkdir(join(homedir(), ".foolscap"), { recursive: true });
+        await writeFile(settingsFile, JSON.stringify({ claudeMdExcludes: userMemoryExcludes() }));
+        args.push("--settings", settingsFile);
+      }
+    }
     if (fleetUrl) {
       // The permission relay is registered as an MCP server; the config
       // goes through a file because inline JSON does not survive shells.
@@ -205,6 +225,7 @@ export function createClaudeDriver({ id, cwd, fleetUrl, fleetToken, settingSourc
     turn?.reject(new Error("session closed"));
     turn = null;
     unlink(mcpFile).catch(() => {});
+    unlink(settingsFile).catch(() => {});
   };
 
   return driver;
