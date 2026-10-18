@@ -187,7 +187,7 @@ export function createClaudeDriver({ id, cwd, fleetUrl, fleetToken, settingSourc
       requestId,
       toolCall: {
         toolCallId: requestId,
-        title: titleOf(tool_name, input) || tool_name,
+        title: titleOf(tool_name, input, cwd) || tool_name,
         kind: kindOf(tool_name),
       },
       options: [

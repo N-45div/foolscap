@@ -205,6 +205,22 @@ export function evidenceFor(cell) {
   return evidenceReportFor(cell).evidence;
 }
 
+
+/** Shorten to at most `max` characters, ending on a whole word. */
+export function clip(text, max) {
+  const t = String(text ?? "").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1).replace(/\s+\S*$/, "");
+  return `${cut || t.slice(0, max - 1)}…`;
+}
+
+/** A task's name from its first sentence: "Fix add() in src/math.mjs…". */
+export function nameFromPrompt(prompt) {
+  const line = String(prompt ?? "").split(/\r?\n/).find((l) => l.trim()) ?? "";
+  const sentence = line.trim().split(/[.!?](?:\s|$)/)[0].trim();
+  return sentence ? clip(sentence, 32) : null;
+}
+
 export class AgentSession extends EventEmitter {
   constructor({
     id,
@@ -469,7 +485,7 @@ export class AgentSession extends EventEmitter {
     if (!this.worktree) throw new Error("this task works in your checkout directly; there is nothing to merge");
     if (["starting", "working", "blocked", "checking"].includes(this.status)) throw new Error("wait for the agent to finish first");
     const asked = this.builder.cells[0]?.prompt ?? this.name;
-    const subject = `${this.label}: ${asked.split(/\r?\n/)[0]}`.slice(0, 72);
+    const subject = clip(`${this.label}: ${asked.split(/\r?\n/)[0].trim()}`, 72);
     const sha = await mergeWorktree(this.worktree, { message: subject });
     this.emit("event", { type: "merged", sha, ...(this.changes ?? {}) });
     await removeWorktree(this.worktree);
@@ -642,7 +658,7 @@ export class Fleet extends EventEmitter {
     const id = givenId ?? randomBytes(6).toString("hex");
     const s = new AgentSession({
       id,
-      name: name?.trim() || `${basename(worktree?.repo ?? cwd) || "agent"}-${++this.counter}`,
+      name: name?.trim() || nameFromPrompt(prompt) || `${basename(worktree?.repo ?? cwd) || "agent"}-${++this.counter}`,
       agent,
       cwd,
       relay,

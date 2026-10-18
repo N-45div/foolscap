@@ -1,3 +1,4 @@
+import { isAbsolute, relative, sep } from "node:path";
 /**
  * From Claude Code's stream-json to a document.
  *
@@ -26,7 +27,16 @@ const textOf = (content) => {
 };
 
 /** A one-line human title for a tool call, the way ACP would phrase it. */
-export function titleOf(name, input) {
+/** A file inside the task's folder, named from that folder with forward
+    slashes; anything outside it keeps its full path. */
+export function relativeIn(cwd, file) {
+  if (!cwd || !file) return file;
+  const rel = relative(cwd, file);
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) return file;
+  return rel.split(sep).join("/");
+}
+
+export function titleOf(name, input, cwd = null) {
   const i = input ?? {};
   const first = (...keys) => {
     for (const k of keys) if (typeof i[k] === "string" && i[k]) return i[k];
@@ -40,7 +50,7 @@ export function titleOf(name, input) {
     case "Edit":
     case "Write":
     case "MultiEdit":
-      return `${name} ${first("file_path")}`;
+      return `${name} ${relativeIn(cwd, first("file_path"))}`;
     case "Glob":
     case "Grep":
       return `${name} ${first("pattern")}`;
