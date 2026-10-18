@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createWorktree, git, mergeWorktree, removeWorktree, worktreeChanges } from "../server/worktree.mjs";
@@ -48,6 +49,16 @@ test("changes are counted, new files included, and merged as one commit", async 
   assert.equal(await git(dir, ["log", "-1", "--format=%s"]), "foolscap: add two");
   assert.equal(await git(dir, ["ls-files", "node_modules"]), "", "the dependency link is never merged");
   await removeWorktree(wt);
+});
+
+test("removing a worktree that a just-closed process still sits in leaves no folder behind", async () => {
+  const { dir, root } = await repo();
+  const wt = await createWorktree({ cwd: dir, id: "t5", root });
+  const held = spawn(process.execPath, ["-e", "setTimeout(() => {}, 700)"], { cwd: wt.path, stdio: "ignore" });
+  await removeWorktree(wt);
+  await new Promise((r) => (held.exitCode === null ? held.on("exit", r) : r()));
+  assert.equal(existsSync(wt.path), false);
+  assert.equal(await git(dir, ["branch", "--list", "foolscap/t5"]), "");
 });
 
 test("a dependency link stays out of the merge even when the agent staged everything", async () => {

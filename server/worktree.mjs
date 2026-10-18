@@ -181,6 +181,13 @@ async function unlinkDependencies(path) {
 export async function removeWorktree(wt) {
   await unlinkDependencies(wt.path);
   await git(wt.repo, ["worktree", "remove", "--force", wt.path]).catch(() => {});
+  // Windows keeps a folder while a process that just closed still has it as
+  // its working directory, and git leaves it behind empty. rmdir only ever
+  // removes an empty folder, so retrying it cannot touch anyone's files.
+  for (let i = 0; i < 15 && existsSync(wt.path); i++) {
+    await rmdir(wt.path).catch(() => {});
+    if (existsSync(wt.path)) await new Promise((r) => setTimeout(r, 200));
+  }
   await git(wt.repo, ["worktree", "prune"]).catch(() => {});
   await git(wt.repo, ["branch", "-D", wt.branch]).catch(() => {});
 }

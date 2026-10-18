@@ -488,10 +488,13 @@ export class AgentSession extends EventEmitter {
     const subject = clip(`${this.label}: ${asked.split(/\r?\n/)[0].trim()}`, 72);
     const sha = await mergeWorktree(this.worktree, { message: subject });
     this.emit("event", { type: "merged", sha, ...(this.changes ?? {}) });
-    await removeWorktree(this.worktree);
-    this.worktree = null;
     this.merged = sha;
+    // The agent goes first: on Windows its process holds the folder open.
+    const worktree = this.worktree;
     this.close();
+    await removeWorktree(worktree);
+    this.worktree = null;
+    this.changed();
     return sha;
   }
 
