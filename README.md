@@ -2,11 +2,12 @@
 
 **An inbox for your coding agents and assistants.** foolscap lives in your
 tray, tells you the moment an agent needs you, and sends the next prompt
-only when the tests pass.
+only when the tests pass. **[foolscap.dev](https://foolscap.dev)** shows it
+replaying a real run.
 
 ![GPL-3.0 license](https://img.shields.io/badge/license-GPL--3.0-b8860b)
 ![Windows and Linux](https://img.shields.io/badge/runs%20on-Windows%20·%20Linux-1a1a1a)
-![Status: alpha](https://img.shields.io/badge/status-1.0%20alpha-2f6349)
+![Status: beta](https://img.shields.io/badge/status-1.0%20beta-2f6349)
 
 > _foolscap: the paper ledgers were written on._
 
