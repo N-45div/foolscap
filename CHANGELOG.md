@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-beta.1 — 15 October 2026
+## 1.0.0-beta.2 — 18 October 2026
 
 foolscap is a desktop app that lives in your tray: an inbox for your
 coding agents and assistants. It tells you the moment one needs you, and
