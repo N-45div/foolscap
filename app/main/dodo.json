@@ -1,14 +1,15 @@
 {
   "mode": "live",
   "products": {
-    "[DODO PRODUCT ID OF FOOLSCAP]": "app",
-    "[DODO PRODUCT ID OF FOOLSCAP + VOICE]": "app+voice",
-    "[DODO PRODUCT ID OF THE VOICE SUBSCRIPTION]": "voice"
+    "pdt_0Nq54emTq3Ibz3NjPBmXY": "app",
+    "pdt_0Nq54enZpuVjpHmkVkzjU": "app+voice",
+    "pdt_0Nq54eptORUeP0zoeFo4V": "voice",
+    "pdt_0Nq54erP4BOVwDuuKYqxK": "voice"
   },
   "links": {
-    "app": "[DODO PAYMENT LINK FOR FOOLSCAP]",
-    "appVoice": "[DODO PAYMENT LINK FOR FOOLSCAP + VOICE]",
-    "voice": "[DODO PAYMENT LINK FOR THE VOICE SUBSCRIPTION]",
+    "app": "https://cloud.foolscap.dev/v1/checkout/app",
+    "appVoice": "https://cloud.foolscap.dev/v1/checkout/appVoice",
+    "voice": "https://cloud.foolscap.dev/v1/checkout/voiceMonthly",
     "portal": "[DODO CUSTOMER PORTAL LINK]"
   }
 }
