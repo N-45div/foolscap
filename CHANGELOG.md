@@ -56,6 +56,6 @@ sends the next prompt only when the tests pass.
   one-time licence: $9 for the first 50 early buyers, then $19; $99 with
   voice; or the voice subscription ($8 a month or $79 a year), which
   includes the app while it runs. Building it yourself stays free.
-- **Licence keys from Dodo Payments**, checked with Dodo's public licence
-  endpoints: only the key, its instance and the computer's name are sent,
-  and a key keeps working offline for 7 days.
+- **Licence keys** are checked online: only the key, its activation and
+  the computer's name are sent, and a key keeps working offline for 7
+  days.

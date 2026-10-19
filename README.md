@@ -1,69 +1,93 @@
-# foolscap
+<p align="center">
+  <img src="build/icon.png" width="88" height="88" alt="foolscap">
+</p>
 
-**An inbox for your coding agents and assistants.** foolscap lives in your
-tray, tells you the moment an agent needs you, and sends the next prompt
-only when the tests pass. **[foolscap.dev](https://foolscap.dev)** shows it
-replaying a real run.
+<h1 align="center">foolscap</h1>
 
-![GPL-3.0 license](https://img.shields.io/badge/license-GPL--3.0-b8860b)
-![Windows and Linux](https://img.shields.io/badge/runs%20on-Windows%20·%20Linux-1a1a1a)
-![Status: beta](https://img.shields.io/badge/status-1.0%20beta-2f6349)
+<p align="center">
+  <b>The inbox for your coding agents.</b><br>
+  Know the moment an agent needs you. The next prompt waits for green tests.
+</p>
 
-> _foolscap: the paper ledgers were written on._
+<p align="center">
+  <a href="https://github.com/N-45div/foolscap/actions/workflows/ci.yml"><img src="https://github.com/N-45div/foolscap/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/N-45div/foolscap/releases"><img src="https://img.shields.io/github/v/release/N-45div/foolscap?include_prereleases&label=release&color=0a64ad" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20Linux-0d0f12" alt="Windows and Linux">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-0b7a53" alt="GPL-3.0"></a>
+</p>
 
-Running three agents at once fails the same way every time: you keep
+<p align="center">
+  <a href="https://foolscap.dev"><b>Website</b></a> ·
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#how-the-queue-decides"><b>How the gate works</b></a> ·
+  <a href="CONTRIBUTING.md"><b>Contributing</b></a>
+</p>
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/hero-dark.png">
+  <img src="docs/screenshots/hero-light.png" alt="The foolscap panel with one Claude Code task on YOUR MOVE asking to edit src/math.mjs, and the pill opened on the same ask with Approve, Deny and Open">
+</picture>
+
+<p align="center"><sub>Every screenshot here is foolscap's real UI, replaying two real Claude Code runs from 18 Oct 2026.</sub></p>
+
+## Why
+
+Running three agents at once fails the same way every time. You keep
 switching terminals to see which one is stuck on a permission prompt,
-which one finished, and which one broke the tests. foolscap does that
-watching for you.
+which one finished, and which one broke the tests.
 
-- **One click away.** It starts with your computer and sits in the tray.
-  Click the icon and a small panel opens: **Your move** on top
-  (approvals, failing checks, finished work), **Agents' move** below,
-  and a line to start the next task. `Ctrl+Shift+Space` does the same.
-- **Answer from the notification.** When an agent asks to run a
-  command, the notification has **Approve** and **Deny** on it. When it
-  finishes, type its next step right into the notification.
-- **Queue the next step.** Give a task its "then…" steps. After each
-  turn, foolscap runs the repo's own tests itself, outside the agent's
-  sandbox, and sends the next prompt only when they pass. Red or unclear
-  holds the queue and tells you why. You can always send anyway.
-- **Green means green.** A test run counts as passing only with exit
-  code 0 and at least one test that actually ran, read from the runner's
-  own counts. Zero tests, a missing exit code or a sandbox block is never
-  green.
-- **Many agents, one repo.** Each task gets its own git worktree, so
+foolscap does that watching for you. It sits in your tray, tells you
+the moment an agent needs you, lets you answer right there, and sends
+the next prompt only when the repo's own tests pass.
+
+## Features
+
+- **One glance.** A small pill floats above the taskbar with what needs
+  you. Click the tray icon or press `Ctrl+Shift+Space` for the panel:
+  **Your move** at the centre (approvals, failing checks, finished
+  work), **Working** around it, and a line to start the next task.
+- **Answer in place.** When an agent asks to edit a file or run a
+  command, hover the pill or open the notification: **Approve**,
+  **Deny**, or type a reply, without switching windows.
+- **Queue the next step.** Give a task its "then…" steps. After every
+  turn foolscap runs the repo's tests itself, outside the agent's
+  sandbox, and sends the next prompt only on green. Red or unclear holds
+  the queue and tells you why. You can always send anyway.
+- **Green means green.** A run passes only with exit code 0 and at least
+  one test that actually ran, read from the runner's own counts. Zero
+  tests, a missing exit code or a sandbox block is never green.
+- **Many agents, one repo.** Every task gets its own git worktree, so
   several agents can work on the same repo at once. When one is done and
   green: **Merge** (one commit on your branch) or **Discard**.
 - **Every agent in one place.** Claude Code and Codex natively, plus any
-  agent that speaks [ACP](https://agentclientprotocol.com), including
-  personal assistants like Hermes and OpenClaw. Switch on **Claude Code
-  sessions from my terminal** in Settings and the ones you start
-  yourself show up too, approvals included.
-- **While you were away.** Come back after a while and the panel says
-  what happened: what finished green, what went red, what went out from
-  the queue, what is waiting for you. Counted from a local journal, never
-  guessed.
+  agent that speaks [ACP](https://agentclientprotocol.com). Sessions
+  you start yourself in a terminal can show up too, approvals included.
+- **While you were away.** Come back and the panel says what happened:
+  what finished green, what went red, what went out from the queue, what
+  is waiting for you. Counted from a local journal, never guessed.
+- **Voice prompts.** Click the mic, say what to do, and a clean prompt
+  lands in the box.
 
-### Sessions you start yourself
+### The gate
 
-Settings › **Claude Code sessions from my terminal** shows the exact
-hooks foolscap would add to your Claude Code settings before it adds
-them, backs the file up first, and **Turn off** removes exactly those.
-The hooks post to `127.0.0.1:47821` with a secret token. If foolscap is
-closed, Claude Code carries on as normal; a permission you don't answer
-in foolscap within 45 seconds is asked in your terminal as usual. A
-queued prompt goes out when the session next stops, after the repo's
-tests pass.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/gate-dark.png">
+  <img src="docs/screenshots/gate-light.png" alt="Left: a red card, tests failing 2/3 checked by foolscap, Next prompt held: tests red: exit code 1, with Send anyway, Drop it and Reply. Right: a green card, ready 3/3 tests checked by foolscap, +10 -1 across 2 files, with Merge and Discard">
+</picture>
 
-### Worktrees
+The run on the left was broken on purpose to show the gate: the agent was
+told to change `mul()` and not to run the tests. foolscap ran them anyway,
+saw 2 of 3 pass, and held the next prompt. On the right, a task that came
+back 3/3 green and is one click from a single commit.
 
-New tasks get a worktree under your local app data folder by default
-(untick **Own worktree** to work in the folder directly). Installed
-dependencies (`node_modules`, `.venv`) are linked in from your checkout,
-and files listed in a `.worktreeinclude` at the repo root (one per line,
-like `.env.local`) are copied. **Merge** refuses if your checkout has
-uncommitted changes and backs out of a conflict, so your own work is
-never mixed in.
+### The queue
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/queue-dark.png">
+  <img src="docs/screenshots/queue-light.png" alt="Left: the new-task line with a prompt, a queued then-step and a mic button. Right: the task's card while foolscap checks with the repo's tests, the queued step waiting below">
+</picture>
 
 ## Agents
 
@@ -71,29 +95,55 @@ never mixed in.
 |---|---|---|
 | **Claude Code** | your own `claude`, natively (stream-json) | yes, through a permission relay |
 | **Codex** | your own `codex exec --json`, one run per turn | no: headless Codex works inside its sandbox |
-| Gemini CLI, OpenCode, Goose, Qwen Code, Kimi, Copilot CLI, Kiro | ACP over stdio | yes, ACP permission requests |
+| OpenCode, Goose, Qwen Code, Kimi CLI, GitHub Copilot CLI, Kiro | ACP over stdio | yes, ACP permission requests |
 | **Hermes**, **OpenClaw** (assistants) | `hermes acp`, `openclaw acp` | yes; their queue always waits for you |
 | Claude Code / Codex through their ACP adapters | `npx` adapters, pinned | yes; API keys only (see below) |
 | Anything else that speaks ACP | give its command | yes |
 
-foolscap only shows agents it finds installed. On Windows it looks
+foolscap only lists agents it finds installed. On Windows it looks
 through npm `.cmd` shims and native installers to the real executable,
 and launches it with no shell in between.
 
-## Your login stays yours
+## Install
 
-foolscap runs the agent CLIs you already installed and signed in to,
-unmodified. It never reads, stores or forwards your tokens. It removes
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `CODEX_API_KEY` from the agents
-it launches, so a key left in your environment can't silently move your
-subscription to pay-per-token billing. The Claude Code and Codex ACP
-adapters authenticate through SDKs whose terms do not cover routing a
-personal subscription through another app, so they are listed for API
-keys only.
+Download from **[foolscap.dev](https://foolscap.dev)** or the
+**[Releases](https://github.com/N-45div/foolscap/releases)** page. 1.0 is
+in beta.
 
-By default Claude Code starts with your own settings and `CLAUDE.md`.
-Turn off **Use my Claude Code settings** to start it with only the
-repo's settings (`--setting-sources project,local`).
+**Windows 10 and 11:** run `foolscap-setup-x64.exe`. The installer is
+not code-signed yet, so SmartScreen may say "Windows protected your PC":
+choose **More info › Run anyway**. On Windows 11, new tray icons start
+behind the `^` arrow: switch foolscap on under **Settings ›
+Personalization › Taskbar › Other system tray icons** to keep it in
+sight.
+
+**Linux (x64):**
+
+```sh
+sudo apt install ./foolscap-amd64.deb          # Debian, Ubuntu
+sudo dnf install ./foolscap-x86_64.rpm         # Fedora, RHEL
+sudo pacman -U ./foolscap-x64.pacman           # Arch
+chmod +x foolscap-x86_64.AppImage && ./foolscap-x86_64.AppImage   # anywhere
+```
+
+On GNOME, tray icons need the
+[AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
+`Ctrl+Shift+Space` and the pill work everywhere.
+
+foolscap runs the agents you already have, so install and sign in to at
+least one of them first (for example `claude` or `codex`).
+
+### Build from source
+
+```sh
+git clone https://github.com/N-45div/foolscap.git
+cd foolscap
+pnpm install
+pnpm dev          # runs the tray app from source
+pnpm dist:win     # or dist:linux: installers into release/
+```
+
+Needs Node 22.5+ and pnpm.
 
 ## How the queue decides
 
@@ -110,51 +160,63 @@ result strictly. Green sends the next queued prompt. Red, unclear, an
 error or a stopped turn holds the queue with the reason. An assistant's
 queue always waits for you.
 
-## Install
+## Worktrees
 
-1.0 is in alpha. Installers (an NSIS installer and the Microsoft Store
-for Windows; AppImage, deb, rpm and pacman for Linux) come with the
-first release. Until then, build it:
+New tasks get a worktree under your local app data folder by default
+(untick **Own worktree** to work in the folder directly). Installed
+dependencies (`node_modules`, `.venv`) are linked in from your checkout,
+and files listed in a `.worktreeinclude` at the repo root (one per line,
+like `.env.local`) are copied. **Merge** refuses if your checkout has
+uncommitted changes and backs out of a conflict, so your own work is
+never mixed in.
 
-```sh
-git clone https://github.com/N-45div/foolscap.git
-cd foolscap
-pnpm install
-pnpm dev          # runs the tray app from source
-pnpm dist:win     # or dist:linux, to build installers into release/
-```
+## Sessions you start yourself
 
-Needs Node 22.5+ and pnpm. On GNOME, tray icons need the
-[AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/);
-`Ctrl+Shift+Space` and the tray menu work everywhere. On Windows 11, new
-tray icons start behind the `^` arrow: turn foolscap on under Settings ›
-Personalization › Taskbar › Other system tray icons to keep it in sight.
+Settings › **Claude Code sessions from my terminal** shows the exact
+hooks foolscap would add to your Claude Code settings before it adds
+them, backs the file up first, and **Turn off** removes exactly those.
+The hooks post to `127.0.0.1:47821` with a secret token. If foolscap is
+closed, Claude Code carries on as normal; a permission you don't answer
+in foolscap within 45 seconds is asked in your terminal as usual. A
+queued prompt goes out when the session next stops, after the repo's
+tests pass.
 
-## Open source, and paid
+## Your login stays yours
 
-The code is open: read it, change it, build it yourself, free. The
-**official app** (signed installer, auto-updates, the Microsoft Store)
-is how foolscap is paid for, once, with no subscription:
+foolscap runs the agent CLIs you already installed and signed in to,
+unmodified. It never reads, stores or forwards your tokens. It removes
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `CODEX_API_KEY` from the agents
+it launches, so a key left in your environment can't silently move your
+subscription to pay-per-token billing. The Claude Code and Codex ACP
+adapters authenticate through SDKs whose terms do not cover routing a
+personal subscription through another app, so they are listed for API
+keys only.
 
-| | Price | What you get |
-|---|---|---|
-| **foolscap** | **$9 for the first 50 early buyers**, then $19 | The app forever, every update, on up to 3 computers, plus 2,000 voice words a week |
-| **foolscap + Voice** | $99 | The app forever, plus voice prompts forever (25,000 words a month) |
-| Voice subscription | $8/month or $79/year | For heavy talkers: 120,000 voice words a month |
+By default Claude Code starts with your own settings and `CLAUDE.md`.
+Turn off **Use my Claude Code settings** to start it with only the
+repo's settings.
 
-Official builds start with a 14-day free trial. After it, tasks already
-running finish and new ones need a key; a build you make yourself never
-asks. Keys are checked with [Dodo Payments](https://dodopayments.com):
-only the key, its activation and your computer's name are sent, and a key
-keeps working offline for 7 days after its last check.
+## Voice prompts
 
-**Voice prompts.** Click the mic in the new-task line, talk (Hinglish
-welcome), click again, and a clean prompt lands in the box. The audio is
-cut at your pauses and sent while you talk, so the prompt is ready
-moments after you stop. It goes to foolscap Cloud with your licence key
-and nothing else; it is transcribed and written up there, and neither
-the audio nor the text is kept. Voice needs a licence key, and works
-once foolscap Cloud is live.
+Click the mic in the new-task line, talk (Hinglish works too), click
+again, and a clean prompt lands in the box. The audio is cut at your
+pauses and sent while you talk, so the prompt is ready moments after you
+stop. It goes to foolscap Cloud with your licence key and nothing else;
+it is transcribed and written up there, and neither the audio nor the
+text is kept.
+
+## Official builds
+
+The code is free: read it, change it, build it yourself. The official
+installers are how foolscap is paid for. They start with a 14-day free
+trial, then take a one-time licence from
+[foolscap.dev](https://foolscap.dev/#pricing), which comes with a weekly
+allowance of voice prompts. A build you make yourself never asks for
+one.
+
+When an official build checks a licence, only the key, its activation
+and your computer's name are sent, and a key keeps working offline for 7
+days after its last check.
 
 ## Develop
 
@@ -163,15 +225,18 @@ pnpm test         # node --test: no network, no API keys, no real agents
 pnpm build        # the renderer into dist/renderer
 ```
 
-- `app/main/`: the Electron main process (tray, panel, notifications,
-  permission relay, settings)
-- `app/renderer/`: the panel and full window (React)
+- `app/main/`: the Electron main process (tray, pill, panel,
+  notifications, permission relay, settings)
+- `app/renderer/`: the panel, pill and full window (React)
 - `server/`: the session core: drivers, the next-prompt queue, evidence,
-  test verification, the archive readers
+  test verification, worktrees
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for adding an agent or a driver.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for adding an agent or a driver,
+and [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## License
 
-GPL-3.0-or-later: you may use, change and share foolscap, and any copy
-you share must stay open under the same licence.
+[GPL-3.0-or-later](LICENSE): you may use, change and share foolscap, and
+any copy you share must stay open under the same licence.
+
+<sub>The name: foolscap is the paper ledgers were written on.</sub>
