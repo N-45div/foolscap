@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-beta.2 — 18 October 2026
+## 1.0.0-beta.3 — 19 October 2026
 
 foolscap is a desktop app that lives in your tray: an inbox for your
 coding agents and assistants. It tells you the moment one needs you, and
@@ -54,4 +54,8 @@ sends the next prompt only when the tests pass.
 - **GPL-3.0-or-later**, so every copy stays open source.
 - **Open source, and paid.** Official builds have a 14-day trial, then a
   one-time licence: $9 for the first 50 early buyers, then $19; $99 with
-  voice. Building it yourself stays free.
+  voice; or the voice subscription ($8 a month or $79 a year), which
+  includes the app while it runs. Building it yourself stays free.
+- **Licence keys from Dodo Payments**, checked with Dodo's public licence
+  endpoints: only the key, its instance and the computer's name are sent,
+  and a key keeps working offline for 7 days.
