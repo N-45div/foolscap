@@ -320,7 +320,8 @@ export class AgentSession extends EventEmitter {
     try {
       await this.driver.start({
         onExit: (code, err) => {
-          if (this.status === "exited" || this.status === "error") return;
+          // Merge stops the agent on purpose; the task is removed right after.
+          if (this.merging || this.status === "exited" || this.status === "error") return;
           this.exitCode = code;
           this.endedAt = now();
           this.status = err || code !== 0 ? "error" : "exited";
@@ -499,6 +500,7 @@ export class AgentSession extends EventEmitter {
     // Only the process stops; the task stays "done" until it is removed, so
     // nothing flashes as exited.
     const worktree = this.worktree;
+    this.merging = true;
     this.driver.close();
     await removeWorktree(worktree);
     this.worktree = null;
