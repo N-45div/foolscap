@@ -81,3 +81,27 @@ test("what a task is doing names files from its folder", () => {
   b.feed("a2c", { type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Edit", input: { file_path: file, old_string: "a", new_string: "b" } }] } });
   assert.equal(b.activity.text, "Edit src/q.ts");
 });
+
+test("Merge stops the task's running dev server first, so its worktree can go", async () => {
+  const dir = await repo();
+  // The dev server writes into its folder while it runs, as real ones do.
+  await writeFile(join(dir, "serve.mjs"), 'import { createServer } from "node:http";\nimport { writeFileSync } from "node:fs";\nsetInterval(() => writeFileSync(".serve-heartbeat", String(Date.now())), 200);\ncreateServer((q, s) => s.end("ok")).listen(Number(process.env.PORT), "127.0.0.1", () => console.log(`up at http://localhost:${process.env.PORT}/`));\n');
+  await writeFile(join(dir, ".foolscap.json"), JSON.stringify({ run: "node serve.mjs" }));
+  await writeFile(join(dir, ".gitignore"), ".serve-heartbeat\n");
+  await git(dir, ["add", "-A"]);
+  await git(dir, ["commit", "-q", "-m", "a dev server"]);
+  const fleet = new Fleet({});
+  fleets.push(fleet);
+  const snap = await fleet.launchTask({ agent: "claude", cwd: dir, worktree: true, prompt: "edit the first thing" });
+  const s = fleet.get(snap.id);
+  await until(() => s.status === "done" && s.verified?.verdict === "green");
+  await s.startRun();
+  await until(() => s.snapshot().run?.status === "running");
+  assert.equal(s.snapshot().run.url, `http://localhost:${s.ports.base}/`);
+  const path = s.worktree.path;
+  await writeFile(join(path, "c.txt"), "from the task\n");
+
+  await s.merge();
+  assert.equal(s.snapshot().run.status, "stopped");
+  assert.equal(existsSync(path), false);
+});

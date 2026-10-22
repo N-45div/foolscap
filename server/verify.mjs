@@ -22,6 +22,14 @@ import { readTestRun } from "./test-run.mjs";
 
 const NPM_PLACEHOLDER = /no test specified/i;
 
+/** The package manager the repo's lockfile names: npm, pnpm, yarn or bun. */
+export function packageManager(cwd, { exists = existsSync } = {}) {
+  if (exists(join(cwd, "pnpm-lock.yaml"))) return "pnpm";
+  if (exists(join(cwd, "yarn.lock"))) return "yarn";
+  if (exists(join(cwd, "bun.lock")) || exists(join(cwd, "bun.lockb"))) return "bun";
+  return "npm";
+}
+
 /** The command that tests this repo, as `{ line, source }`, or null. */
 export async function testCommandFor(cwd, { exists = existsSync, read = (p) => readFile(p, "utf8") } = {}) {
   try {
@@ -34,11 +42,9 @@ export async function testCommandFor(cwd, { exists = existsSync, read = (p) => r
     const pkg = JSON.parse(await read(join(cwd, "package.json")));
     const script = pkg.scripts?.test;
     if (typeof script === "string" && script.trim() && !NPM_PLACEHOLDER.test(script)) {
-      let manager = "npm";
-      if (exists(join(cwd, "pnpm-lock.yaml"))) manager = "pnpm";
-      else if (exists(join(cwd, "yarn.lock"))) manager = "yarn";
-      else if (exists(join(cwd, "bun.lock")) || exists(join(cwd, "bun.lockb"))) manager = "bun run";
-      return { line: `${manager} test`, source: "package.json" };
+      // `bun test` is Bun's own runner, not the script.
+      const manager = packageManager(cwd, { exists });
+      return { line: `${manager === "bun" ? "bun run" : manager} test`, source: "package.json" };
     }
   } catch {
     // no package.json

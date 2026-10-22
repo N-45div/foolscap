@@ -41,6 +41,7 @@ import { commandOf, validationKey } from "./outcome.mjs";
 import { claudeExitCode, readTestRun } from "./test-run.mjs";
 import { verifyRepo } from "./verify.mjs";
 import { createWorktree, mergeWorktree, removeWorktree, repoRoot, worktreeChanges } from "./worktree.mjs";
+import { DevRun } from "./dev-run.mjs";
 import { PortBlocks, portEnv } from "./ports.mjs";
 import { createAcpDriver } from "./drivers/acp.mjs";
 import { createClaudeDriver } from "./drivers/claude.mjs";
@@ -254,6 +255,7 @@ export class AgentSession extends EventEmitter {
     this.portBlocks = portBlocks;
     this.ports = null; // { base, last } once start() has taken a block
     this.taskEnv = {};
+    this.devRun = null; // the task's dev server, once Run is pressed
     const hooks = {
       env: this.taskEnv,
       log: this.log,
@@ -497,6 +499,8 @@ export class AgentSession extends EventEmitter {
   async merge() {
     if (!this.worktree) throw new Error("this task works in your checkout directly; there is nothing to merge");
     if (["starting", "working", "blocked", "checking"].includes(this.status)) throw new Error("wait for the agent to finish first");
+    // A running dev server writes into the worktree and, on Windows, holds it open.
+    await this.stopRun();
     const asked = this.builder.cells[0]?.prompt ?? this.name;
     const subject = clip(`${this.label}: ${asked.split(/\r?\n/)[0].trim()}`, 72);
     // The body tells the whole story: every prompt sent, and the last check.
@@ -523,11 +527,26 @@ export class AgentSession extends EventEmitter {
   /** Throw this task's worktree away. */
   async discard() {
     if (!this.worktree) throw new Error("this task has no worktree to discard");
+    await this.stopRun();
     this.cancel();
     this.close();
     await removeWorktree(this.worktree);
     this.worktree = null;
     this.changed();
+  }
+
+  /** Start the repo's dev server for this task, in its folder, on its PORT. */
+  async startRun() {
+    if (!this.devRun) {
+      this.devRun = new DevRun({ cwd: this.cwd, port: this.ports?.base ?? null, env: this.taskEnv });
+      this.devRun.on("change", () => this.changed());
+    }
+    await this.devRun.start();
+  }
+
+  /** Stop the dev server and everything it started; resolves once it has exited. */
+  async stopRun() {
+    await this.devRun?.stop();
   }
 
   /** The person overrides a hold: send the next queued prompt now. */
@@ -591,6 +610,7 @@ export class AgentSession extends EventEmitter {
   }
 
   close() {
+    this.devRun?.stop();
     if (this.status !== "exited" && this.status !== "error") {
       this.status = "exited";
       this.endedAt = now();
@@ -621,6 +641,7 @@ export class AgentSession extends EventEmitter {
       assistant: this.assistant,
       worktree: this.worktree ? { branch: this.worktree.branch, repo: this.worktree.repo } : null,
       ports: this.ports,
+      run: this.devRun?.snapshot() ?? null,
       changes: this.changes,
       merged: this.merged ?? null,
       lastPrompt: this.builder.current?.prompt ?? null,
