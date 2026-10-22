@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -32,9 +33,15 @@ const freePort = () =>
 const alive = (pid) => {
   try {
     process.kill(pid, 0);
-    return true;
   } catch {
     return false;
+  }
+  // A killed process whose parent died first stays a zombie until init
+  // reaps it, and a container's init may never: that is gone, for us.
+  try {
+    return !/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8"));
+  } catch {
+    return true;
   }
 };
 
