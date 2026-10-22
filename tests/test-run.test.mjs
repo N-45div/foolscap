@@ -97,3 +97,17 @@ test("a denied command has no exit code; a clean Claude result is exit 0", () =>
   assert.equal(claudeExitCode(NODE_GREEN, false), 0);
   assert.equal(claudeExitCode([{ type: "text", text: "Exit code 2\nboom" }], true), 2);
 });
+
+test("a clean run that counted its passing tests is green, whatever its test names say", () => {
+  // From foolscap's own suite, run as a repo's tests: these pass, and mention the words.
+  const output = "✔ a denied write prints Operation not permitted (2ms)\n✔ spawn EPERM from the sandbox is unknown (1ms)\n✔ no tests found is never green (1ms)\nℹ tests 3\nℹ pass 3\nℹ fail 0\n";
+  const run = readTestRun({ command: "node --test", output, exitCode: 0 });
+  assert.equal(run.verdict, "green");
+  assert.equal(run.reason, "3/3 passed");
+});
+
+test("the sandbox words still hold a run that did not prove itself", () => {
+  assert.equal(readTestRun({ command: "node --test", output: "Error: spawn EPERM\n", exitCode: 0 }).verdict, "unknown");
+  assert.equal(readTestRun({ command: "node --test", output: "Error: spawn EPERM\nℹ tests 1\nℹ pass 0\nℹ fail 1\n", exitCode: 1 }).verdict, "unknown");
+  assert.equal(readTestRun({ command: "node --test", output: "No tests found, exiting with code 0\nℹ tests 0\nℹ pass 0\nℹ fail 0\n", exitCode: 0 }).verdict, "unknown");
+});

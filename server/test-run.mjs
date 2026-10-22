@@ -160,14 +160,18 @@ export function readTestRun({ command, output, exitCode = null, kind: knownKind 
   const result = (verdict, reason) => ({ kind, verdict, exitCode, counts, reason });
   if (!kind) return result("unknown", "not a test or build command");
 
-  if (SANDBOX_BLOCKED.test(text)) return result("unknown", "the agent's sandbox blocked the run");
+  // A run that exited 0 and counted its own passing tests has proved itself.
+  // Real suites print "Operation not permitted" or "no tests found" in tests
+  // of their own that pass, so those words only count without that proof.
+  const proven = exitCode === 0 && counts?.total > 0 && counts.passed > 0 && counts.failed === 0;
+  if (SANDBOX_BLOCKED.test(text) && !proven) return result("unknown", "the agent's sandbox blocked the run");
   if (exitCode === null) {
     if (counts?.failed > 0) return result("red", `${counts.failed} of ${counts.total} failed`);
     return result("unknown", "exit code not reported");
   }
   if (exitCode !== 0) return result("red", `exit code ${exitCode}`);
   if (kind === "build") return result("green", "exit code 0");
-  if (NOTHING_RAN.test(text)) return result("unknown", "no tests ran");
+  if (NOTHING_RAN.test(text) && !proven) return result("unknown", "no tests ran");
   if (!counts) return result("green", "exit code 0 (test count not printed)");
   if (counts.total === 0 || counts.passed + counts.failed === 0) return result("unknown", "no tests ran");
   if (counts.failed > 0) return result("red", `${counts.failed} of ${counts.total} failed`);
