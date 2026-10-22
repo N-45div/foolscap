@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWorktree, git, mergeWorktree, removeWorktree, worktreeChanges } from "../server/worktree.mjs";
+import { createWorktree, git, mergeWorktree, removeWorktree, sweepWorktrees, worktreeChanges } from "../server/worktree.mjs";
 
 async function repo() {
   const dir = await mkdtemp(join(tmpdir(), "foolscap-repo-"));
@@ -84,4 +84,17 @@ test("a dirty main checkout is refused, and a conflict leaves it untouched", asy
   assert.equal(await readFile(join(dir, "a.txt"), "utf8"), "mine, uncommitted\n");
   assert.equal(await git(dir, ["status", "--porcelain", "--untracked-files=no"]), "");
   await removeWorktree(wt);
+});
+
+test("the sweep takes empty leftover folders and nothing else", async () => {
+  const root = await mkdtemp(join(tmpdir(), "foolscap-sweep-"));
+  await mkdir(join(root, "left-empty"));
+  await mkdir(join(root, "live-task"));
+  await writeFile(join(root, "live-task", "work.txt"), "keep me\n");
+  await writeFile(join(root, "a-file"), "not a folder\n");
+  const removed = await sweepWorktrees(root);
+  assert.deepEqual(removed, [join(root, "left-empty")]);
+  assert.equal(existsSync(join(root, "live-task", "work.txt")), true);
+  assert.equal(existsSync(join(root, "a-file")), true);
+  assert.deepEqual(await sweepWorktrees(join(root, "missing")), []);
 });

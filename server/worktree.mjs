@@ -15,7 +15,7 @@
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readFile, rmdir, symlink, unlink } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, readFile, rmdir, symlink, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -190,4 +190,33 @@ export async function removeWorktree(wt) {
   }
   await git(wt.repo, ["worktree", "prune"]).catch(() => {});
   await git(wt.repo, ["branch", "-D", wt.branch]).catch(() => {});
+  await sweepWorktrees(dirname(wt.path));
+}
+
+/**
+ * Remove the empty folders left in the worktree root. A folder open in
+ * an editor, or a terminal, outlives Merge and Discard on Windows; once
+ * that window closes, the next sweep (after a task, or at start) takes
+ * it. rmdir refuses a folder with anything in it, so this never touches
+ * a live task or anyone's files.
+ */
+export async function sweepWorktrees(root = worktreeRoot()) {
+  const removed = [];
+  let entries = [];
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return removed;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const path = join(root, entry.name);
+    try {
+      await rmdir(path);
+      removed.push(path);
+    } catch {
+      // not empty, or still open somewhere: leave it
+    }
+  }
+  return removed;
 }
