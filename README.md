@@ -61,6 +61,9 @@ the next prompt only when the repo's own tests pass.
 - **Many agents, one repo.** Every task gets its own git worktree, so
   several agents can work on the same repo at once. When one is done and
   green: **Merge** (one commit on your branch) or **Discard**.
+- **Side by side.** Open any task in VS Code, Cursor, Windsurf,
+  Antigravity or Zed. Every task gets its own ports, and **Run** starts
+  its dev server, so you can try two tasks' work at the same time.
 - **Every agent in one place.** Claude Code and Codex natively, plus any
   agent that speaks [ACP](https://agentclientprotocol.com). Sessions
   you start yourself in a terminal can show up too, approvals included.
@@ -169,6 +172,35 @@ and files listed in a `.worktreeinclude` at the repo root (one per line,
 like `.env.local`) are copied. **Merge** refuses if your checkout has
 uncommitted changes and backs out of a conflict, so your own work is
 never mixed in.
+
+## Side by side
+
+**Open** on a task lists the editors installed on your computer (VS Code,
+Cursor, Windsurf, Antigravity, Zed) and opens that task's folder in a
+window of its own, so three tasks can mean three editor windows. foolscap
+runs each editor's own launcher, with no shell in between.
+
+**Ports.** Every task foolscap starts gets its own block of ten ports,
+from 4100 up (4100–4109, 4110–4119, …), skipping any port something is
+already listening on. The agent gets `PORT` (the first port) and
+`FOOLSCAP_PORTS` (`4110-4119`), so two agents starting dev servers never
+fight over 3000.
+
+**Run** starts the task's dev server in its folder on its `PORT`. The
+command comes from `.foolscap.json`, else the `dev` or `start` script in
+`package.json`, run by the package manager the lockfile names. `$PORT` in
+the command becomes the number, for servers that don't read `PORT`
+themselves:
+
+```json
+{ "test": "pnpm test", "run": "pnpm dev --port $PORT" }
+```
+
+The card shows the address the server prints (or `localhost:PORT` once
+it answers) as a link, and **Stop** ends the server and everything it
+started. Merge and Discard stop it first. On Windows, a task folder still
+open in an editor when you merge or discard is removed once you close
+that window.
 
 ## Sessions you start yourself
 

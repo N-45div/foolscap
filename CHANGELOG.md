@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.0-beta.5 — unreleased
+
+### Added
+
+- **Open in your editor.** Each task's folder opens in VS Code, Cursor,
+  Windsurf, Antigravity or Zed, whichever are installed, or in the file
+  manager.
+- **Ports per task.** Every task gets its own block of ten ports from
+  4100; its agent gets `PORT` and `FOOLSCAP_PORTS`.
+- **Run.** Starts the task's dev server on its port, from `.foolscap.json`
+  `"run"` or the `dev`/`start` script, shows its local address as a link,
+  and stops it, and everything it started, on Stop, Merge or Discard.
+
+### Fixed
+
+- A test run that exited 0 and counted its own passing tests is green
+  even when a passing test's name mentions a permission error or "no
+  tests found"; it used to hold the queue as "sandbox blocked".
+- A task folder an editor still had open after Merge or Discard is
+  removed once that window closes, instead of staying behind empty.
+
 ## 1.0.0-beta.4 — 19 October 2026
 
 foolscap is a desktop app that lives in your tray: an inbox for your
