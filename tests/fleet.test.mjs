@@ -281,3 +281,19 @@ test("stopping an agent mid-turn interrupts it instead of killing the session", 
   assert.notEqual(s.status, "exited", "an interrupted turn leaves the session readable");
   assert.throws(() => s.prompt("again"), /stopped/);
 });
+
+test("each task gets its own block of ports, and its agent sees them", async () => {
+  const { fleet, s: first } = await one("first");
+  const elsewhere = await mkdtemp(join(tmpdir(), "foolscap-ports-"));
+  const second = fleet.get(fleet.launch({ agent: AGENT, cwd: elsewhere, name: "second" }).id);
+  await until(() => second.status === "idle");
+  assert.ok(first.ports && second.ports);
+  assert.notEqual(first.ports.base, second.ports.base);
+  assert.equal(second.ports.last, second.ports.base + 9);
+  second.prompt("which port");
+  await until(() => second.status === "done");
+  assert.match(JSON.stringify(second.doc().cells), new RegExp(`PORT=${second.ports.base} FOOLSCAP_PORTS=${second.ports.base}-${second.ports.last}`));
+  const freed = first.ports.base;
+  fleet.close(first.id);
+  assert.equal(fleet.portBlocks.held.has(freed), false);
+});

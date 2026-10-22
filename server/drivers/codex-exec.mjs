@@ -38,7 +38,7 @@ export function codexTurnArgs({ threadId = null, cwd, model = null }) {
     : ["exec", ...common, "-C", cwd, "-"];
 }
 
-export function createCodexExecDriver({ cwd, model = null, log, onFrame }) {
+export function createCodexExecDriver({ cwd, model = null, env: extraEnv = {}, log, onFrame }) {
   const spec = codexSpec();
   let child = null;
   let onExitOnce = null;
@@ -62,7 +62,7 @@ export function createCodexExecDriver({ cwd, model = null, log, onFrame }) {
         fn(value);
       };
 
-      child = spawnAgent({ ...spec, args }, cwd, agentEnv());
+      child = spawnAgent({ ...spec, args }, cwd, agentEnv(process.env, extraEnv));
       onFrame("c2a", { type: "prompt", text });
       child.stdin.end(text);
 

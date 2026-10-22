@@ -41,6 +41,7 @@ import { commandOf, validationKey } from "./outcome.mjs";
 import { claudeExitCode, readTestRun } from "./test-run.mjs";
 import { verifyRepo } from "./verify.mjs";
 import { createWorktree, mergeWorktree, removeWorktree, repoRoot, worktreeChanges } from "./worktree.mjs";
+import { PortBlocks, portEnv } from "./ports.mjs";
 import { createAcpDriver } from "./drivers/acp.mjs";
 import { createClaudeDriver } from "./drivers/claude.mjs";
 import { createCodexExecDriver } from "./drivers/codex-exec.mjs";
@@ -232,6 +233,7 @@ export class AgentSession extends EventEmitter {
     codexModel = null,
     verify = true,
     worktree = null,
+    portBlocks = null,
     record = true,
     recordDir = acpArchiveDir(),
     log = () => {},
@@ -247,7 +249,13 @@ export class AgentSession extends EventEmitter {
 
     const entry = FLEET_AGENTS[agent];
     this.driverKind = entry?.driver ?? "acp";
+    // The task's own variables (its PORT), filled in by start() before the
+    // agent spawns; drivers read them at spawn time.
+    this.portBlocks = portBlocks;
+    this.ports = null; // { base, last } once start() has taken a block
+    this.taskEnv = {};
     const hooks = {
+      env: this.taskEnv,
       log: this.log,
       onFrame: (dir, msg) => this.onFrame(dir, msg),
       onPermission: (p) => this.onPermission(p),
@@ -304,6 +312,10 @@ export class AgentSession extends EventEmitter {
   }
 
   async start() {
+    if (this.portBlocks) {
+      this.ports = await this.portBlocks.take();
+      Object.assign(this.taskEnv, portEnv(this.ports));
+    }
     if (this.record) {
       await mkdir(this.recordDir, { recursive: true });
       this.recorder = new Recorder(join(this.recordDir, `${this.id}.jsonl`), {
@@ -608,6 +620,7 @@ export class AgentSession extends EventEmitter {
       held: this.held,
       assistant: this.assistant,
       worktree: this.worktree ? { branch: this.worktree.branch, repo: this.worktree.repo } : null,
+      ports: this.ports,
       changes: this.changes,
       merged: this.merged ?? null,
       lastPrompt: this.builder.current?.prompt ?? null,
@@ -655,6 +668,7 @@ export class Fleet extends EventEmitter {
     this.defaults = defaults;
     this.sessions = new Map();
     this.counter = 0;
+    this.portBlocks = new PortBlocks();
   }
 
   /** Spawn a session; returns at once — the agent boots in the background.
@@ -679,6 +693,7 @@ export class Fleet extends EventEmitter {
       codexModel: opts.codexModel ?? null,
       verify: opts.verify ?? true,
       worktree,
+      portBlocks: this.portBlocks,
       record: this.record,
       recordDir: this.recordDir,
       log: this.log,
@@ -726,6 +741,7 @@ export class Fleet extends EventEmitter {
     const s = this.sessions.get(id);
     if (!s) return false;
     s.close();
+    this.portBlocks.release(s.ports);
     this.sessions.delete(id);
     this.emit("change");
     return true;

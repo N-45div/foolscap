@@ -66,7 +66,7 @@ export function userMemoryExcludes(env = process.env) {
  * @param {string | null} [opts.settingSources] e.g. "project,local" to start
  *   Claude Code without the user's own settings; null keeps them all.
  */
-export function createClaudeDriver({ id, cwd, fleetUrl, fleetToken, settingSources = null, log, onFrame, onPermission }) {
+export function createClaudeDriver({ id, cwd, fleetUrl, fleetToken, settingSources = null, env: extraEnv = {}, log, onFrame, onPermission }) {
   const spec = claudeSpec();
   let child = null;
   let buffered = "";
@@ -137,7 +137,8 @@ export function createClaudeDriver({ id, cwd, fleetUrl, fleetToken, settingSourc
 
     // No API keys (they would bill the API, not the subscription) and no
     // nesting marker (Claude Code refuses to start inside a session).
-    const env = agentEnv();
+    // `extraEnv` is the task's own, such as its PORT.
+    const env = agentEnv(process.env, extraEnv);
 
     child = spawnAgent({ ...spec, args }, cwd, env);
     child.stdout.on("data", (chunk) => {

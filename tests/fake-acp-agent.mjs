@@ -10,6 +10,7 @@
  *       "ask"   the agent asks permission before finishing
  *       "fail"  the test run comes back red
  *       "slow"  the turn takes a while (for cancel tests)
+ *       "port"  the reply says which PORT and FOOLSCAP_PORTS it was given
  *   session/cancel  → the in-flight prompt ends with "cancelled"
  *
  * It also emits a line of noise on stderr and a non-JSON line on stdout,
@@ -35,7 +36,7 @@ async function runTurn(req) {
 
   update(sessionId, {
     sessionUpdate: "agent_message_chunk",
-    content: { type: "text", text: "working on it" },
+    content: { type: "text", text: text.includes("port") ? `PORT=${process.env.PORT} FOOLSCAP_PORTS=${process.env.FOOLSCAP_PORTS} ` : "working on it" },
   });
   await sleep(text.includes("slow") ? 1500 : 30);
   if (inflight?.cancelled) return;

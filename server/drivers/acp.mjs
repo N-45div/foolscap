@@ -12,7 +12,7 @@ import { terminateProcessTree } from "./process.mjs";
 
 const CLIENT_INFO = { name: "foolscap", title: "foolscap", version: "0.4.0" };
 
-export function createAcpDriver({ spec, cwd, log, onFrame, onPermission }) {
+export function createAcpDriver({ spec, cwd, env: extraEnv = {}, log, onFrame, onPermission }) {
   let child = null;
   let buffered = "";
   let rpcId = 0;
@@ -80,7 +80,7 @@ export function createAcpDriver({ spec, cwd, log, onFrame, onPermission }) {
   }
 
   driver.start = async ({ onExit }) => {
-    child = spawnAgent(spec, cwd);
+    child = spawnAgent(spec, cwd, { ...process.env, ...extraEnv });
     child.stdout.on("data", (chunk) => {
       buffered += chunk.toString("utf8");
       let nl;
