@@ -49,6 +49,24 @@ export const Folder = () => (
   </svg>
 );
 
+export const Play = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" {...stroke}>
+    <path d="M5 3.5v9l7-4.5z" />
+  </svg>
+);
+
+export const Square = () => (
+  <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true" {...stroke}>
+    <rect x="4" y="4" width="8" height="8" rx="1" />
+  </svg>
+);
+
+export const Out = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" {...stroke}>
+    <path d="M6 3.5h6.5V10M12.5 3.5 4 12" />
+  </svg>
+);
+
 export const Next = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" {...stroke}>
     <path d="M3 8h9M9 4.5 12.5 8 9 11.5" />

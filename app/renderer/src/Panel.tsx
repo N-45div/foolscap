@@ -228,7 +228,7 @@ export function Panel({ state, focus }: { state: AppState; focus: string | null 
           <Orbit sessions={state.sessions} selected={selected?.id ?? null} onSelect={setPicked} needs={state.counts.needs} />
           {selected && (
             <div className="selected-card">
-              <Card s={selected} focused />
+              <Card s={selected} focused editors={state.editors} />
             </div>
           )}
           <div className="orbit-hint">Tab walks the planets{selected?.pendingPermission ? " · A approve · D deny" : ""}</div>

@@ -1,7 +1,7 @@
 /** One task in the inbox: a card when it is your move, a quiet line when it is the agent's. */
-import { useState } from "react";
-import { ago, api, folderName, type Session } from "./api";
-import { Cross, Folder, Next, StatusMark } from "./icons";
+import { useRef, useState } from "react";
+import { ago, api, folderName, type Editor, type Session } from "./api";
+import { Cross, Folder, Next, Out, Play, Square, StatusMark } from "./icons";
 
 type Outcome = Promise<{ ok: true } | { error: string }>;
 
@@ -51,6 +51,85 @@ function Queue({ s }: { s: Session }) {
   );
 }
 
+/** The task's own ports and its dev server: Run, the preview link, Stop. */
+function Workspace({ s }: { s: Session }) {
+  const { error, run } = useAction();
+  if (s.external || !s.ports) return null;
+  const r = s.run;
+  const live = r?.status === "starting" || r?.status === "running";
+  return (
+    <div className="workspace">
+      <span className="chip" title={`This task's ports are ${s.ports.base}–${s.ports.last}; its agent gets PORT=${s.ports.base}.`}>:{s.ports.base}</span>
+      {r?.status === "running" && r.url && (
+        <button className="btn quiet preview" title={r.line ?? undefined} onClick={() => run(api().openPreview(s.id))}>
+          {r.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} <Out />
+        </button>
+      )}
+      {r?.status === "starting" && <span className="muted">starting {r.line}…</span>}
+      {r?.status === "failed" && <span className="error" title={r.tail || undefined}>Run stopped: {r.error}</span>}
+      {live ? (
+        <button className="btn quiet" onClick={() => run(api().stopRun(s.id))}>
+          <Square /> Stop
+        </button>
+      ) : (
+        <button className="btn quiet" title="Start this task's dev server on its own port" onClick={() => run(api().run(s.id))}>
+          <Play /> Run
+        </button>
+      )}
+      {error && <span className="error">{error}</span>}
+    </div>
+  );
+}
+
+/** Open the task's folder in an installed editor, or in the file manager. */
+function OpenIn({ s, editors }: { s: Session; editors: Editor[] }) {
+  const [open, setOpen] = useState<null | string>(null);
+  const { error, run } = useAction();
+  const wrap = useRef<HTMLSpanElement>(null);
+  // The menu opens toward the side of the window that has room for it.
+  const toggle = () => {
+    if (open) return setOpen(null);
+    const r = wrap.current?.getBoundingClientRect();
+    const x = r && r.left + 170 > window.innerWidth - 8 ? "right" : "left";
+    const y = r && r.top < 220 ? "down" : "up";
+    setOpen(`${x} ${y}`);
+  };
+  const name = folderName(s.cwd);
+  if (!editors.length) {
+    return (
+      <button className="btn quiet" aria-label={`Open the ${name} folder`} onClick={() => run(api().openIn(s.id, "folder"))}>
+        <Folder />
+      </button>
+    );
+  }
+  const choices = [...editors, { id: "folder", label: "Folder" }];
+  return (
+    <span className="open-in" ref={wrap} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setOpen(null)}>
+      <button className="btn quiet" aria-haspopup="menu" aria-expanded={Boolean(open)} aria-label={`Open the ${name} folder in…`} onClick={toggle}>
+        <Folder /> Open
+      </button>
+      {open && (
+        <div className={`menu ${open}`} role="menu" onKeyDown={(e) => e.key === "Escape" && setOpen(null)}>
+          {choices.map((e) => (
+            <button
+              key={e.id}
+              role="menuitem"
+              className="btn quiet"
+              onClick={() => {
+                setOpen(null);
+                run(api().openIn(s.id, e.id));
+              }}
+            >
+              {e.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <span className="error">{error}</span>}
+    </span>
+  );
+}
+
 /** A one-line input that sends on Enter. */
 function Say({ placeholder, onSend, onDone }: { placeholder: string; onSend: (text: string) => Outcome; onDone: () => void }) {
   const [text, setText] = useState("");
@@ -74,7 +153,7 @@ function Say({ placeholder, onSend, onDone }: { placeholder: string; onSend: (te
   );
 }
 
-export function Card({ s, focused = false }: { s: Session; focused?: boolean }) {
+export function Card({ s, focused = false, editors = [] }: { s: Session; focused?: boolean; editors?: Editor[] }) {
   const [saying, setSaying] = useState<null | "reply" | "next">(null);
   const { error, run } = useAction();
   const p = s.pendingPermission;
@@ -98,6 +177,7 @@ export function Card({ s, focused = false }: { s: Session; focused?: boolean }) 
         <Evidence s={s} />
         {s.held && <span className="held">Next prompt held: {s.held.reason}</span>}
         <Queue s={s} />
+        <Workspace s={s} />
 
         {saying ? (
           <Say
@@ -138,9 +218,7 @@ export function Card({ s, focused = false }: { s: Session; focused?: boolean }) 
               <button className="btn quiet" onClick={() => run(api().seen(s.id, s.turns))}>Done</button>
             )}
             {ended && <button className="btn" onClick={() => run(api().close(s.id))}>Clear</button>}
-            <button className="btn quiet" aria-label={`Open the ${folderName(s.cwd)} folder`} onClick={() => run(api().openFolder(s.id))}>
-              <Folder />
-            </button>
+            <OpenIn s={s} editors={editors} />
           </div>
         )}
         {error && <span className="error">{error}</span>}

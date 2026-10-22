@@ -107,7 +107,7 @@ export function Full({ state, focus, setFocus }: { state: AppState; focus: strin
             <div className="cards">
               {yours.map((s) => (
                 <div key={s.id} onClickCapture={() => setFocus(s.id)}>
-                  <Card s={s} focused={selected?.id === s.id} />
+                  <Card s={s} focused={selected?.id === s.id} editors={state.editors} />
                 </div>
               ))}
             </div>

@@ -21,7 +21,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { rank } from "../../server/attention.mjs";
 import { ExternalSessions } from "../../server/external.mjs";
+import { installedEditors, openInEditor } from "../../server/editors.mjs";
 import { Fleet, fleetAgentCatalog } from "../../server/fleet.mjs";
+import { sweepWorktrees } from "../../server/worktree.mjs";
 import { Journal, digest, today } from "../../server/journal.mjs";
 import * as claudeHooks from "./claude-hooks.mjs";
 import { startHookServer } from "./hook-server.mjs";
@@ -60,6 +62,7 @@ let pill = null;
 let full = null;
 let quitting = false;
 let agents = [];
+let editors = []; // the editors installed here, for each task's Open menu
 let taskbarDark = true;
 const seen = new Set(); // "<id>:<turns>" the person has looked at
 
@@ -74,6 +77,7 @@ function snapshot() {
   return {
     sessions,
     agents,
+    editors,
     // The hook token stays in this process.
     settings: { ...settings.get(), hookToken: undefined },
     licence: licence.status(),
@@ -405,6 +409,13 @@ function session(id) {
   return s;
 }
 
+/** A task foolscap started itself: Run needs its folder and its ports. */
+function ownTask(id) {
+  const s = fleet.get(id);
+  if (!s) throw new Error(external.get(id) ? "Run works for tasks foolscap started" : "that task is gone");
+  return s;
+}
+
 /** Each handler answers { ok, ...result } or { error } so the page can say why. */
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_event, ...args) => {
@@ -467,6 +478,19 @@ function registerIpc() {
     seen.add(`${id}:${turns}`);
   });
   handle("task:openFolder", (id) => shell.openPath(session(id).cwd));
+  handle("task:openIn", async (id, editor) => {
+    const { cwd } = session(id);
+    if (editor === "folder") return void (await shell.openPath(cwd));
+    await openInEditor(editor, cwd);
+  });
+  handle("task:run", (id) => ownTask(id).startRun());
+  handle("task:stopRun", (id) => ownTask(id).stopRun());
+  // Only the task's own local server opens, and only over http to this machine.
+  handle("task:openPreview", (id) => {
+    const url = ownTask(id).devRun?.url;
+    if (!url || !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(url)) throw new Error("this task's server is not running");
+    return shell.openExternal(url);
+  });
   handle("task:merge", async (id) => {
     const sha = await session(id).merge();
     fleet.close(id);
@@ -490,6 +514,7 @@ function registerIpc() {
   });
   handle("agents:refresh", () => {
     agents = fleetAgentCatalog();
+    editors = installedEditors();
   });
   handle("hooks:plan", async () => {
     if (!settings.get().hookToken) await settings.set({ hookToken: randomBytes(18).toString("hex") });
@@ -586,6 +611,9 @@ if (!app.requestSingleInstanceLock()) {
     const relay = await startRelay(fleet, TOKEN);
     fleet.defaults.relay = { url: relay.url, token: TOKEN };
     agents = fleetAgentCatalog();
+    editors = installedEditors();
+    // Folders an editor held open past Merge or Discard, last time.
+    sweepWorktrees().then((gone) => gone.length && log(`swept ${gone.length} empty worktree folder(s)`), () => {});
 
     external = new ExternalSessions({ log });
     const notify = createNotifier({

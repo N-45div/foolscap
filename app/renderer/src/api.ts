@@ -11,6 +11,17 @@ export interface TestRun {
   outputTail?: string;
 }
 
+/** A task's dev server, started with Run. */
+export interface RunState {
+  status: "idle" | "starting" | "running" | "stopped" | "failed";
+  line: string | null;
+  url: string | null;
+  port: number | null;
+  exitCode: number | null;
+  error: string | null;
+  tail: string;
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -33,6 +44,8 @@ export interface Session {
   held: { reason: string } | null;
   assistant: boolean;
   worktree: { branch: string; repo: string } | null;
+  ports: { base: number; last: number } | null;
+  run: RunState | null;
   changes: { files: number; added: number; removed: number } | null;
   merged: string | null;
   lastPrompt: string | null;
@@ -94,9 +107,15 @@ export interface Digest {
   agentMs: number;
 }
 
+export interface Editor {
+  id: string;
+  label: string;
+}
+
 export interface AppState {
   sessions: Session[];
   agents: Agent[];
+  editors: Editor[];
   settings: Settings;
   licence: Licence;
   hooks: { on: boolean; error: string | null };
@@ -121,6 +140,10 @@ export interface Bridge {
   close(id: string): Result;
   seen(id: string, turns: number): Result;
   openFolder(id: string): Result;
+  openIn(id: string, editor: string): Result;
+  run(id: string): Result;
+  stopRun(id: string): Result;
+  openPreview(id: string): Result;
   merge(id: string): Result<{ sha: string }>;
   discard(id: string): Result;
   pickRepo(): Result<{ picked: string | null }>;
